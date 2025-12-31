@@ -4,6 +4,9 @@ CC := gcc
 CFLAGS := -std=c99 -Wall -Wextra -Wpedantic
 CFLAGS += -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules
 
+# Build directory
+BUILD_DIR := build
+
 # Release flags
 RELEASE_FLAGS := -Ofast -flto -fomit-frame-pointer -ffast-math
 RELEASE_FLAGS += -funroll-loops -DNDEBUG
@@ -41,7 +44,7 @@ ALL_SRC := $(CORE_SRC) $(OBJECTS_SRC) $(PARSER_SRC) $(COMPILER_SRC) \
 OBJ_RELEASE := $(ALL_SRC:.c=.release.o)
 OBJ_DEBUG := $(ALL_SRC:.c=.debug.o)
 
-TARGET := zex
+TARGET := $(BUILD_DIR)/zex
 
 # Default: Release build
 all: release
@@ -50,16 +53,21 @@ release: CFLAGS += $(RELEASE_FLAGS)
 release: LDFLAGS := $(LDFLAGS_RELEASE)
 release: $(TARGET)
 	@strip $(TARGET) 2>/dev/null || true
+	@echo "✓ Built $(TARGET)"
+	@ls -lh $(TARGET)
 
 debug: CFLAGS += $(DEBUG_FLAGS)  
 debug: LDFLAGS := $(LDFLAGS_DEBUG)
-debug: $(TARGET)-debug
+debug: $(BUILD_DIR)/zex-debug
 
-$(TARGET): $(OBJ_RELEASE)
+$(TARGET): $(BUILD_DIR) $(OBJ_RELEASE)
 	$(CC) $(OBJ_RELEASE) -o $@ $(LDFLAGS)
 
-$(TARGET)-debug: $(OBJ_DEBUG)
+$(BUILD_DIR)/zex-debug: $(BUILD_DIR) $(OBJ_DEBUG)
 	$(CC) $(OBJ_DEBUG) -o $@ $(LDFLAGS)
+
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
 
 %.release.o: %.c
 	$(CC) $(CFLAGS) $(RELEASE_FLAGS) -c $< -o $@
@@ -69,9 +77,10 @@ $(TARGET)-debug: $(OBJ_DEBUG)
 
 clean:
 	find . -name "*.o" -delete
-	rm -f $(TARGET) $(TARGET)-debug
+	rm -rf $(BUILD_DIR)
+	@echo "✓ Cleaned build artifacts"
 
 test: release
-	./$(TARGET) examples/test.zex
+	$(TARGET) examples/test.zex
 
 .PHONY: all release debug clean test
