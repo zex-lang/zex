@@ -1,0 +1,32 @@
+# Test Python-style callable classes
+
+# Test type() function
+println("--- Type introspection ---")
+println(type(5))
+println(type(3.14))
+println(type("hello"))
+println(type(true))
+println(type(null))
+
+# Test class objects
+println("")
+println("--- Class objects ---")
+println(int)
+println(float)
+println(string)
+println(bool)
+
+# Test type conversion (calling classes)
+println("")
+println("--- Type conversion ---")
+println(int(3.14))
+println(float(42))
+println(string(123))
+println(bool(0))
+println(bool(1))
+
+# Test type comparison
+println("")
+println("--- Type comparison ---")
+var x = 5
+println(type(x) == int)

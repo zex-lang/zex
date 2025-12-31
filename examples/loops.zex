@@ -1,0 +1,36 @@
+# Test while and do-while loops
+
+println("=== While Loop Test ===")
+
+var i = 0
+while i < 5 {
+    println("i = " + string(i))
+    i += 1
+}
+
+println("")
+println("=== Do-While Loop Test ===")
+
+var j = 0
+do {
+    println("j = " + string(j))
+    j += 1
+} while j < 3
+
+println("")
+println("=== Loop with condition initially false ===")
+var k = 10
+while k < 5 {
+    println("This should not print")
+}
+println("While loop skipped (k was " + string(k) + ")")
+
+println("")
+println("=== Do-While executes at least once ===")
+var m = 10
+do {
+    println("m = " + string(m) + " (executes once even though m >= 5)")
+} while m < 5
+
+println("")
+println("=== Done! ===")
