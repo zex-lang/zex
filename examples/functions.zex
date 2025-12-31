@@ -1,0 +1,31 @@
+# Functions in Zex
+
+fun greet(name) {
+    println("Hello, " + name + "!")
+}
+
+fun add(a, b) {
+    return a + b
+}
+
+fun factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fun fib(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+greet("Zex")
+
+var sum = add(10, 20)
+println("10 + 20 = " + string(sum))
+
+println("factorial(5) = " + string(factorial(5)))
+println("fib(10) = " + string(fib(10)))

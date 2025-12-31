@@ -1,0 +1,28 @@
+# Variables and Types in Zex
+
+# Variables
+var name = "Zex"
+var age = 1
+var pi = 3.14159
+var active = true
+
+println("Name: " + name)
+println("Age: " + string(age))
+println("Pi: " + string(pi))
+println("Active: " + string(active))
+
+# Type conversion
+var x = int(3.14)
+var y = float(42)
+var s = string(100)
+var b = bool(1)
+
+println("int(3.14) = " + string(x))
+println("float(42) = " + string(y))
+println("string(100) = " + s)
+println("bool(1) = " + string(b))
+
+# Type introspection
+println("type(42) = " + string(type(42)))
+println("type(3.14) = " + string(type(3.14)))
+println("type(\"hi\") = " + string(type("hi")))

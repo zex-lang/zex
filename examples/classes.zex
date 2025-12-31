@@ -1,0 +1,46 @@
+# Classes in Zex
+
+class Person {
+    var name = ""
+    var age = 0
+    
+    fun init(self, name, age) {
+        self.name = name
+        self.age = age
+    }
+    
+    fun greet(self) {
+        println("Hi, I'm " + self.name)
+    }
+    
+    fun birthday(self) {
+        self.age += 1
+        println(self.name + " is now " + string(self.age))
+    }
+}
+
+class Rectangle {
+    var width = 0
+    var height = 0
+    
+    fun init(self, w, h) {
+        self.width = w
+        self.height = h
+    }
+    
+    fun area(self) {
+        return self.width * self.height
+    }
+    
+    fun perimeter(self) {
+        return 2 * (self.width + self.height)
+    }
+}
+
+var alice = Person("Alice", 25)
+alice.greet()
+alice.birthday()
+
+var rect = Rectangle(10, 5)
+println("Area: " + string(rect.area()))
+println("Perimeter: " + string(rect.perimeter()))

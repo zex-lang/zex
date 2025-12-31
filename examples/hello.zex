@@ -1,0 +1,3 @@
+# Hello World in Zex
+
+println("Hello, World!")

@@ -1,0 +1,34 @@
+# Control Flow in Zex
+
+var score = 85
+
+if score >= 90 {
+    println("Grade: A")
+} else if score >= 80 {
+    println("Grade: B")
+} else if score >= 70 {
+    println("Grade: C")
+} else {
+    println("Grade: F")
+}
+
+# Logical operators
+var a = true
+var b = false
+
+if a && b {
+    println("Both true")
+} else if a || b {
+    println("At least one true")
+} else {
+    println("Neither true")
+}
+
+# Comparison operators
+var x = 10
+var y = 20
+
+println("x == y: " + string(x == y))
+println("x != y: " + string(x != y))
+println("x < y: " + string(x < y))
+println("x > y: " + string(x > y))
