@@ -154,6 +154,14 @@ ASTNode* ast_new_do_while(ASTNode* body, ASTNode* condition, int line, int colum
     return node;
 }
 
+ASTNode* ast_new_break(int line, int column) {
+    return alloc_node(AST_BREAK, line, column);
+}
+
+ASTNode* ast_new_continue(int line, int column) {
+    return alloc_node(AST_CONTINUE, line, column);
+}
+
 ASTNode* ast_new_return(ASTNode* value, int line, int column) {
     ASTNode* node = alloc_node(AST_RETURN, line, column);
     node->as.return_stmt.value = value;
@@ -284,6 +292,11 @@ void ast_free(ASTNode* node) {
         case AST_DO_WHILE:
             ast_free(node->as.do_while_stmt.body);
             ast_free(node->as.do_while_stmt.condition);
+            break;
+            
+        case AST_BREAK:
+        case AST_CONTINUE:
+            /* No children to free */
             break;
             
         case AST_RETURN:
@@ -438,6 +451,12 @@ void ast_print(ASTNode* node, int indent) {
             printf("DO_WHILE\n");
             ast_print(node->as.do_while_stmt.body, indent + 1);
             ast_print(node->as.do_while_stmt.condition, indent + 1);
+            break;
+        case AST_BREAK:
+            printf("BREAK\n");
+            break;
+        case AST_CONTINUE:
+            printf("CONTINUE\n");
             break;
         case AST_RETURN:
             printf("RETURN\n");

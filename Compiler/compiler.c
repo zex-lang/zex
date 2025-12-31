@@ -25,6 +25,13 @@ typedef struct CompilerState {
     /* For class compilation */
     bool in_class;
     const char* class_name;
+    
+    /* For loop compilation */
+    int loop_start;             /* Offset of loop start */
+    int* break_jumps;           /* Array of break jump locations to patch */
+    int break_count;
+    int break_capacity;
+    int loop_depth;             /* Nesting depth of loops */
 } CompilerState;
 
 static CompilerState* current = NULL;
@@ -115,6 +122,13 @@ static void init_compiler(CompilerState* state, ObjFunction* function) {
     state->had_error = false;
     state->in_class = false;
     state->class_name = NULL;
+    
+    /* Initialize loop context */
+    state->loop_start = -1;
+    state->break_jumps = NULL;
+    state->break_count = 0;
+    state->break_capacity = 0;
+    state->loop_depth = 0;
     
     scope_init(&state->scope, current ? &current->scope : NULL);
     
@@ -598,8 +612,18 @@ static void compile_if(ASTNode* node) {
 }
 
 static void compile_while(ASTNode* node) {
-    /* Save loop start position */
-    int loop_start = current_chunk()->count;
+    /* Save previous loop context */
+    int prev_loop_start = current->loop_start;
+    int* prev_break_jumps = current->break_jumps;
+    int prev_break_count = current->break_count;
+    int prev_break_capacity = current->break_capacity;
+    
+    /* Initialize new loop context */
+    current->loop_start = current_chunk()->count;
+    current->break_jumps = NULL;
+    current->break_count = 0;
+    current->break_capacity = 0;
+    current->loop_depth++;
     
     /* Condition */
     int cond_reg = alloc_reg();
@@ -614,16 +638,43 @@ static void compile_while(ASTNode* node) {
     
     /* Jump back to start */
     emit_byte(OP_JUMP_BACK, node->line);
-    int loop_offset = current_chunk()->count - loop_start + 2;
+    int loop_offset = current_chunk()->count - current->loop_start + 2;
     emit_byte16(loop_offset, node->line);
     
     /* Patch exit jump */
     patch_jump(exit_jump);
+    
+    /* Patch all break jumps */
+    for (int i = 0; i < current->break_count; i++) {
+        int jump = current_chunk()->count - current->break_jumps[i] - 3;
+        current_chunk()->code[current->break_jumps[i] + 1] = jump & 0xFF;
+        current_chunk()->code[current->break_jumps[i] + 2] = (jump >> 8) & 0xFF;
+    }
+    if (current->break_jumps) {
+        zex_free(current->break_jumps, current->break_capacity * sizeof(int));
+    }
+    
+    /* Restore previous loop context */
+    current->loop_start = prev_loop_start;
+    current->break_jumps = prev_break_jumps;
+    current->break_count = prev_break_count;
+    current->break_capacity = prev_break_capacity;
+    current->loop_depth--;
 }
 
 static void compile_do_while(ASTNode* node) {
-    /* Save loop start position */
-    int loop_start = current_chunk()->count;
+    /* Save previous loop context */
+    int prev_loop_start = current->loop_start;
+    int* prev_break_jumps = current->break_jumps;
+    int prev_break_count = current->break_count;
+    int prev_break_capacity = current->break_capacity;
+    
+    /* Initialize new loop context */
+    current->loop_start = current_chunk()->count;
+    current->break_jumps = NULL;
+    current->break_count = 0;
+    current->break_capacity = 0;
+    current->loop_depth++;
     
     /* Body first */
     compile_node(node->as.do_while_stmt.body, 0);
@@ -632,28 +683,68 @@ static void compile_do_while(ASTNode* node) {
     int cond_reg = alloc_reg();
     compile_expression(node->as.do_while_stmt.condition, cond_reg);
     
-    /* Jump back to start if true */
-    emit_byte(OP_JUMP_IF_TRUE, node->line);
-    emit_byte(cond_reg, node->line);
-    int loop_offset = current_chunk()->count - loop_start + 2;
-    /* For jump_if_true going backwards, we use a forward offset and negate it */
-    emit_byte(0, node->line);  /* Placeholder */
-    emit_byte(0, node->line);  /* Placeholder */
-    
-    /* Actually use jump_back after condition if true */
-    /* Simpler approach: use OP_JUMP_IF_FALSE to skip past OP_JUMP_BACK */
-    current_chunk()->count -= 4;  /* Remove the OP_JUMP_IF_TRUE and placeholders */
-    
+    /* Skip past jump back if false */
     int skip_jump = emit_jump(OP_JUMP_IF_FALSE, cond_reg, node->line);
     free_reg(1);
     
     /* Jump back to loop start */
     emit_byte(OP_JUMP_BACK, node->line);
-    loop_offset = current_chunk()->count - loop_start + 2;
+    int loop_offset = current_chunk()->count - current->loop_start + 2;
     emit_byte16(loop_offset, node->line);
     
     /* Patch skip jump */
     patch_jump(skip_jump);
+    
+    /* Patch all break jumps */
+    for (int i = 0; i < current->break_count; i++) {
+        int jump = current_chunk()->count - current->break_jumps[i] - 3;
+        current_chunk()->code[current->break_jumps[i] + 1] = jump & 0xFF;
+        current_chunk()->code[current->break_jumps[i] + 2] = (jump >> 8) & 0xFF;
+    }
+    if (current->break_jumps) {
+        zex_free(current->break_jumps, current->break_capacity * sizeof(int));
+    }
+    
+    /* Restore previous loop context */
+    current->loop_start = prev_loop_start;
+    current->break_jumps = prev_break_jumps;
+    current->break_count = prev_break_count;
+    current->break_capacity = prev_break_capacity;
+    current->loop_depth--;
+}
+
+static void compile_break(ASTNode* node) {
+    if (current->loop_depth == 0) {
+        fprintf(stderr, "[line %d] Error: 'break' outside of loop\n", node->line);
+        current->had_error = true;
+        return;
+    }
+    
+    /* Emit a forward jump, save location to patch later */
+    int jump_loc = current_chunk()->count;
+    emit_byte(OP_JUMP, node->line);
+    emit_byte16(0xFFFF, node->line);  /* Placeholder */
+    
+    /* Add to break jump list */
+    if (current->break_count >= current->break_capacity) {
+        int old_cap = current->break_capacity;
+        current->break_capacity = old_cap < 8 ? 8 : old_cap * 2;
+        current->break_jumps = GROW_ARRAY(int, current->break_jumps, old_cap, current->break_capacity);
+    }
+    current->break_jumps[current->break_count++] = jump_loc;
+}
+
+static void compile_continue(ASTNode* node) {
+    if (current->loop_depth == 0) {
+        fprintf(stderr, "[line %d] Error: 'continue' outside of loop\n", node->line);
+        current->had_error = true;
+        return;
+    }
+    
+    /* Jump back to loop start */
+    emit_byte(OP_JUMP_BACK, node->line);
+    int loop_offset = current_chunk()->count - current->loop_start + 2;
+    emit_byte16(loop_offset, node->line);
 }
 
 static void compile_return(ASTNode* node) {
@@ -799,6 +890,12 @@ static void compile_node(ASTNode* node, int dest_reg) {
             break;
         case AST_DO_WHILE:
             compile_do_while(node);
+            break;
+        case AST_BREAK:
+            compile_break(node);
+            break;
+        case AST_CONTINUE:
+            compile_continue(node);
             break;
         case AST_RETURN:
             compile_return(node);

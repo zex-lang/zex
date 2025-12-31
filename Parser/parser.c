@@ -568,7 +568,7 @@ static ASTNode* class_declaration(void) {
                           current_parser->current.line,
                           current_parser->current.column,
                           "Expected 'var' or 'fun' in class body",
-                          "Class body can only contain properties (var) and methods (fun).");
+                          "Class body can only contain properties and methods.");
             current_parser->had_error = true;
             synchronize();
         }
@@ -657,6 +657,18 @@ static ASTNode* expression_statement(void) {
     return ast_new_expr_stmt(expr, token.line, token.column);
 }
 
+static ASTNode* break_statement(void) {
+    Token break_token = current_parser->previous;
+    consume_line_end();
+    return ast_new_break(break_token.line, break_token.column);
+}
+
+static ASTNode* continue_statement(void) {
+    Token continue_token = current_parser->previous;
+    consume_line_end();
+    return ast_new_continue(continue_token.line, continue_token.column);
+}
+
 static ASTNode* statement(void) {
     if (match(TOKEN_IF)) {
         return if_statement();
@@ -668,6 +680,14 @@ static ASTNode* statement(void) {
     
     if (match(TOKEN_DO)) {
         return do_while_statement();
+    }
+    
+    if (match(TOKEN_BREAK)) {
+        return break_statement();
+    }
+    
+    if (match(TOKEN_CONTINUE)) {
+        return continue_statement();
     }
     
     if (match(TOKEN_RETURN)) {
