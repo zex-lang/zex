@@ -49,7 +49,6 @@ const char* token_type_name(TokenType type) {
         case TOKEN_AND:             return "and";
         case TOKEN_OR:              return "or";
         case TOKEN_NEWLINE:         return "newline";
-        case TOKEN_SEMICOLON:       return ";";
         case TOKEN_EOF:             return "end of file";
         case TOKEN_ERROR:           return "error";
         default:                    return "unknown";

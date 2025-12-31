@@ -64,7 +64,6 @@ typedef enum {
     
     /* Special */
     TOKEN_NEWLINE,
-    TOKEN_SEMICOLON,        /* Error token - semicolons not allowed */
     TOKEN_EOF,
     TOKEN_ERROR,
 } TokenType;

@@ -30,7 +30,7 @@ static void advance(void) {
         
         /* Report lexer error */
         error_at_token(current_parser->current.start, 
-                      current_parser->current.length,
+                      1,  /* Error tokens point to a single bad character */
                       current_parser->current.line,
                       current_parser->current.column,
                       current_parser->current.start, NULL);
@@ -81,7 +81,7 @@ static void consume_line_end(void) {
                   current_parser->current.line,
                   current_parser->current.column,
                   "Expected end of line after statement",
-                  "Zex doesn't use semicolons. Just press Enter to end a statement.");
+                  NULL);
     current_parser->had_error = true;
 }
 
@@ -371,7 +371,6 @@ static ParseRule rules[] = {
     [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
     [TOKEN_NEWLINE]       = {NULL,     NULL,   PREC_NONE},
-    [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
     [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_HASH]          = {NULL,     NULL,   PREC_NONE},

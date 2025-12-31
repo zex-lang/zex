@@ -239,9 +239,6 @@ Token lexer_scan_token(Lexer* lexer) {
             lexer->column = 1;
             return make_token(lexer, TOKEN_NEWLINE);
         
-        /* Semicolon - ERROR! */
-        case ';':
-            return error_token(lexer, "Semicolons are not allowed in Zex. Remove the ';'");
     }
     
     return error_token(lexer, "Unexpected character");
