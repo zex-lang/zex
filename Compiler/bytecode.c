@@ -319,9 +319,7 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
     }
 }
 
-void chunk_disassemble(Chunk* chunk, const char* name) {
-    printf("== %s ==\n", name);
-    
+void chunk_disassemble(Chunk* chunk) {
     for (int offset = 0; offset < chunk->count;) {
         offset = chunk_disassemble_instruction(chunk, offset);
     }

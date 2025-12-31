@@ -122,7 +122,7 @@ void chunk_write16(Chunk* chunk, uint16_t value, int line);
 int chunk_add_constant(Chunk* chunk, Value value);
 
 /* Disassemble chunk for debugging */
-void chunk_disassemble(Chunk* chunk, const char* name);
+void chunk_disassemble(Chunk* chunk);
 
 /* Disassemble single instruction, returns next offset */
 int chunk_disassemble_instruction(Chunk* chunk, int offset);

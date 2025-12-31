@@ -7,17 +7,9 @@ CFLAGS += -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules
 # Build directory
 BUILD_DIR := build
 
-# Release flags
-RELEASE_FLAGS := -Ofast -flto -fomit-frame-pointer -ffast-math
-RELEASE_FLAGS += -funroll-loops -DNDEBUG
-RELEASE_FLAGS += -fdata-sections -ffunction-sections
-
-# Debug flags
-DEBUG_FLAGS := -O0 -g3 -DDEBUG -DDEBUG_PRINT_CODE -DDEBUG_TRACE_EXECUTION
-
-# Linker flags
-LDFLAGS_RELEASE := -flto -Wl,--gc-sections -lm
-LDFLAGS_DEBUG := -lm
+# Optimization flags
+CFLAGS += -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections
+LDFLAGS := -flto=auto -Wl,--gc-sections -lm
 
 # Source files
 CORE_SRC := Core/memory.c Core/error.c
@@ -41,46 +33,24 @@ PROGRAMS_SRC := Programs/main.c
 ALL_SRC := $(CORE_SRC) $(OBJECTS_SRC) $(PARSER_SRC) $(COMPILER_SRC) \
            $(RUNTIME_SRC) $(MODULES_SRC) $(PROGRAMS_SRC)
 
-OBJ_RELEASE := $(ALL_SRC:.c=.release.o)
-OBJ_DEBUG := $(ALL_SRC:.c=.debug.o)
+OBJS := $(ALL_SRC:.c=.o)
 
 TARGET := $(BUILD_DIR)/zex
 
-# Default: Release build
-all: release
-
-release: CFLAGS += $(RELEASE_FLAGS)
-release: LDFLAGS := $(LDFLAGS_RELEASE)
-release: $(TARGET)
+all: $(TARGET)
 	@strip $(TARGET) 2>/dev/null || true
-	@echo "✓ Built $(TARGET)"
-	@ls -lh $(TARGET)
 
-debug: CFLAGS += $(DEBUG_FLAGS)  
-debug: LDFLAGS := $(LDFLAGS_DEBUG)
-debug: $(BUILD_DIR)/zex-debug
-
-$(TARGET): $(BUILD_DIR) $(OBJ_RELEASE)
-	$(CC) $(OBJ_RELEASE) -o $@ $(LDFLAGS)
-
-$(BUILD_DIR)/zex-debug: $(BUILD_DIR) $(OBJ_DEBUG)
-	$(CC) $(OBJ_DEBUG) -o $@ $(LDFLAGS)
+$(TARGET): $(BUILD_DIR) $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-%.release.o: %.c
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) -c $< -o $@
-
-%.debug.o: %.c
-	$(CC) $(CFLAGS) $(DEBUG_FLAGS) -c $< -o $@
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	find . -name "*.o" -delete
 	rm -rf $(BUILD_DIR)
-	@echo "✓ Cleaned build artifacts"
 
-test: release
-	$(TARGET) examples/test.zex
-
-.PHONY: all release debug clean test
+.PHONY: all clean
