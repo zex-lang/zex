@@ -41,7 +41,6 @@ typedef enum {
     AST_RETURN,
     AST_FUN_DECL,
     AST_CLASS_DECL,
-    AST_PROPERTY_DECL,
     AST_PROGRAM,
 } ASTNodeType;
 
@@ -229,17 +228,9 @@ struct ASTNode {
         /* AST_CLASS_DECL */
         struct {
             char* name;
-            ASTNode** properties;  /* var declarations */
-            int property_count;
             ASTNode** methods;     /* function declarations */
             int method_count;
         } class_decl;
-        
-        /* AST_PROPERTY_DECL (inside class) */
-        struct {
-            char* name;
-            ASTNode* initializer;
-        } property_decl;
         
         /* AST_PROGRAM */
         struct {
@@ -276,9 +267,7 @@ ASTNode* ast_new_break(int line, int column);
 ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);
 ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body, int line, int column);
-ASTNode* ast_new_class_decl(const char* name, ASTNode** properties, int property_count,
-                            ASTNode** methods, int method_count, int line, int column);
-ASTNode* ast_new_property_decl(const char* name, ASTNode* initializer, int line, int column);
+ASTNode* ast_new_class_decl(const char* name, ASTNode** methods, int method_count, int line, int column);
 ASTNode* ast_new_program(ASTNode** statements, int count);
 
 /* Free AST */

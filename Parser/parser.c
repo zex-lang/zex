@@ -537,10 +537,6 @@ static ASTNode* class_declaration(void) {
     skip_newlines();
     
     /* Parse class body */
-    ASTNode** properties = NULL;
-    int property_count = 0;
-    int property_capacity = 0;
-    
     ASTNode** methods = NULL;
     int method_count = 0;
     int method_capacity = 0;
@@ -548,27 +544,7 @@ static ASTNode* class_declaration(void) {
     while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
         skip_newlines();
         
-        if (match(TOKEN_VAR)) {
-            /* Property */
-            consume(TOKEN_IDENTIFIER, "Expected property name");
-            Token prop_name = current_parser->previous;
-            char* prop = zex_strndup(prop_name.start, prop_name.length);
-            
-            ASTNode* init = NULL;
-            if (match(TOKEN_EQUAL)) {
-                init = expression();
-            }
-            
-            ASTNode* property = ast_new_property_decl(prop, init, prop_name.line, prop_name.column);
-            zex_free(prop, prop_name.length + 1);
-            
-            if (property_count >= property_capacity) {
-                property_capacity = GROW_CAPACITY(property_capacity);
-                properties = GROW_ARRAY(ASTNode*, properties, property_count, property_capacity);
-            }
-            properties[property_count++] = property;
-            
-        } else if (match(TOKEN_FUN)) {
+        if (match(TOKEN_FUN)) {
             /* Method */
             ASTNode* method = fun_declaration();
             
@@ -585,8 +561,8 @@ static ASTNode* class_declaration(void) {
                           current_parser->current.length,
                           current_parser->current.line,
                           current_parser->current.column,
-                          "Expected 'var' or 'fun' in class body",
-                          "Class body can only contain properties and methods.");
+                          "Expected 'fun' in class body",
+                          "Class body can only contain methods.");
             current_parser->had_error = true;
             synchronize();
         }
@@ -594,8 +570,7 @@ static ASTNode* class_declaration(void) {
     
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
     
-    ASTNode* node = ast_new_class_decl(name, properties, property_count, 
-                                       methods, method_count,
+    ASTNode* node = ast_new_class_decl(name, methods, method_count,
                                        class_token.line, class_token.column);
     zex_free(name, name_token.length + 1);
     return node;

@@ -1,9 +1,21 @@
 # Classes in Zex
 
-class Person {
-    var name = ""
-    var age = 0
+class Counter {
+    fun init(self, start, step) {
+        self.count = start
+        self.step = step
+    }
     
+    fun increment(self) {
+        self.count += self.step
+    }
+    
+    fun value(self) {
+        return self.count
+    }
+}
+
+class Person {
     fun init(self, name, age) {
         self.name = name
         self.age = age
@@ -20,9 +32,6 @@ class Person {
 }
 
 class Rectangle {
-    var width = 0
-    var height = 0
-    
     fun init(self, w, h) {
         self.width = w
         self.height = h
@@ -37,10 +46,19 @@ class Rectangle {
     }
 }
 
+# Counter with step of 2
+var c = Counter(0, 2)
+c.increment()
+c.increment()
+c.increment()
+println("Counter: " + string(c.value()))
+
+# Person
 var alice = Person("Alice", 25)
 alice.greet()
 alice.birthday()
 
+# Rectangle
 var rect = Rectangle(10, 5)
 println("Area: " + string(rect.area()))
 println("Perimeter: " + string(rect.perimeter()))

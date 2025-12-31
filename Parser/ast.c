@@ -185,21 +185,11 @@ ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body,
     return node;
 }
 
-ASTNode* ast_new_class_decl(const char* name, ASTNode** properties, int property_count,
-                            ASTNode** methods, int method_count, int line, int column) {
+ASTNode* ast_new_class_decl(const char* name, ASTNode** methods, int method_count, int line, int column) {
     ASTNode* node = alloc_node(AST_CLASS_DECL, line, column);
     node->as.class_decl.name = zex_strdup(name);
-    node->as.class_decl.properties = properties;
-    node->as.class_decl.property_count = property_count;
     node->as.class_decl.methods = methods;
     node->as.class_decl.method_count = method_count;
-    return node;
-}
-
-ASTNode* ast_new_property_decl(const char* name, ASTNode* initializer, int line, int column) {
-    ASTNode* node = alloc_node(AST_PROPERTY_DECL, line, column);
-    node->as.property_decl.name = zex_strdup(name);
-    node->as.property_decl.initializer = initializer;
     return node;
 }
 
@@ -330,19 +320,10 @@ void ast_free(ASTNode* node) {
             
         case AST_CLASS_DECL:
             zex_free(node->as.class_decl.name, strlen(node->as.class_decl.name) + 1);
-            for (int i = 0; i < node->as.class_decl.property_count; i++) {
-                ast_free(node->as.class_decl.properties[i]);
-            }
-            FREE_ARRAY(ASTNode*, node->as.class_decl.properties, node->as.class_decl.property_count);
             for (int i = 0; i < node->as.class_decl.method_count; i++) {
                 ast_free(node->as.class_decl.methods[i]);
             }
             FREE_ARRAY(ASTNode*, node->as.class_decl.methods, node->as.class_decl.method_count);
-            break;
-            
-        case AST_PROPERTY_DECL:
-            zex_free(node->as.property_decl.name, strlen(node->as.property_decl.name) + 1);
-            ast_free(node->as.property_decl.initializer);
             break;
             
         case AST_PROGRAM:
@@ -491,17 +472,8 @@ void ast_print(ASTNode* node, int indent) {
             break;
         case AST_CLASS_DECL:
             printf("CLASS(%s)\n", node->as.class_decl.name);
-            for (int i = 0; i < node->as.class_decl.property_count; i++) {
-                ast_print(node->as.class_decl.properties[i], indent + 1);
-            }
             for (int i = 0; i < node->as.class_decl.method_count; i++) {
                 ast_print(node->as.class_decl.methods[i], indent + 1);
-            }
-            break;
-        case AST_PROPERTY_DECL:
-            printf("PROPERTY(%s)\n", node->as.property_decl.name);
-            if (node->as.property_decl.initializer) {
-                ast_print(node->as.property_decl.initializer, indent + 1);
             }
             break;
         case AST_PROGRAM:
