@@ -1,0 +1,62 @@
+[
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Core/memory.c",
+    "file": "Core/memory.c"
+  },
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Core/error.c",
+    "file": "Core/error.c"
+  },
+
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Objects/object.c",
+    "file": "Objects/object.c"
+  },
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Objects/tableobject.c",
+    "file": "Objects/tableobject.c"
+  },
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Objects/stringobject.c",
+    "file": "Objects/stringobject.c"
+  },
+
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Parser/token.c",
+    "file": "Parser/token.c"
+  },
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Parser/lexer.c",
+    "file": "Parser/lexer.c"
+  },
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Parser/parser.c",
+    "file": "Parser/parser.c"
+  },
+
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Compiler/compiler.c",
+    "file": "Compiler/compiler.c"
+  },
+
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Runtime/vm.c",
+    "file": "Runtime/vm.c"
+  },
+
+  {
+    "directory": "/home/starssxhfdmh/dev/zex",
+    "command": "gcc -std=c99 -Wall -Wextra -Wpedantic -Ofast -flto -DNDEBUG -fdata-sections -ffunction-sections -I. -ICore -IObjects -IParser -ICompiler -IRuntime -IModules -c Programs/main.c",
+    "file": "Programs/main.c"
+  }
+]
