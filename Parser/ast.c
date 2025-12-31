@@ -87,6 +87,15 @@ ASTNode* ast_new_set(ASTNode* object, const char* property, ASTNode* value, int 
     return node;
 }
 
+ASTNode* ast_new_set_compound(ASTNode* object, const char* property, BinaryOp op, ASTNode* value, int line, int column) {
+    ASTNode* node = alloc_node(AST_SET_COMPOUND, line, column);
+    node->as.set_compound.object = object;
+    node->as.set_compound.property = zex_strdup(property);
+    node->as.set_compound.op = op;
+    node->as.set_compound.value = value;
+    return node;
+}
+
 ASTNode* ast_new_self(int line, int column) {
     return alloc_node(AST_SELF, line, column);
 }
@@ -248,6 +257,12 @@ void ast_free(ASTNode* node) {
             ast_free(node->as.set.value);
             break;
             
+        case AST_SET_COMPOUND:
+            ast_free(node->as.set_compound.object);
+            zex_free(node->as.set_compound.property, strlen(node->as.set_compound.property) + 1);
+            ast_free(node->as.set_compound.value);
+            break;
+            
         case AST_GROUPING:
             ast_free(node->as.grouping.expression);
             break;
@@ -402,6 +417,11 @@ void ast_print(ASTNode* node, int indent) {
             printf("SET(.%s)\n", node->as.set.property);
             ast_print(node->as.set.object, indent + 1);
             ast_print(node->as.set.value, indent + 1);
+            break;
+        case AST_SET_COMPOUND:
+            printf("SET_COMPOUND(.%s)\n", node->as.set_compound.property);
+            ast_print(node->as.set_compound.object, indent + 1);
+            ast_print(node->as.set_compound.value, indent + 1);
             break;
         case AST_GROUPING:
             printf("GROUPING\n");

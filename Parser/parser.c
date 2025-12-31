@@ -323,6 +323,25 @@ static ASTNode* dot(ASTNode* left, bool can_assign) {
         return node;
     }
     
+    /* Check for compound assignment on property */
+    if (can_assign) {
+        BinaryOp op;
+        bool is_compound = false;
+        
+        if (match(TOKEN_PLUS_EQUAL))  { op = BINOP_ADD; is_compound = true; }
+        else if (match(TOKEN_MINUS_EQUAL)) { op = BINOP_SUB; is_compound = true; }
+        else if (match(TOKEN_STAR_EQUAL))  { op = BINOP_MUL; is_compound = true; }
+        else if (match(TOKEN_SLASH_EQUAL)) { op = BINOP_DIV; is_compound = true; }
+        
+        if (is_compound) {
+            ASTNode* value = expression();
+            ASTNode* node = ast_new_set_compound(left, property, op, value,
+                                                  dot_token.line, dot_token.column);
+            zex_free(property, name_token.length + 1);
+            return node;
+        }
+    }
+    
     ASTNode* node = ast_new_get(left, property, dot_token.line, dot_token.column);
     zex_free(property, name_token.length + 1);
     return node;

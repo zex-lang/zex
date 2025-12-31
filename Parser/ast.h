@@ -23,6 +23,7 @@ typedef enum {
     AST_CALL,
     AST_GET,            /* obj.property */
     AST_SET,            /* obj.property = value */
+    AST_SET_COMPOUND,   /* obj.property += value */
     AST_SELF,
     AST_GROUPING,
     
@@ -151,6 +152,14 @@ struct ASTNode {
             ASTNode* value;
         } set;
         
+        /* AST_SET_COMPOUND */
+        struct {
+            ASTNode* object;
+            char* property;
+            BinaryOp op;
+            ASTNode* value;
+        } set_compound;
+        
         /* AST_GROUPING */
         struct {
             ASTNode* expression;
@@ -252,6 +261,7 @@ ASTNode* ast_new_unary(UnaryOp op, ASTNode* operand, int line, int column);
 ASTNode* ast_new_call(ASTNode* callee, ASTNode** args, int arg_count, int line, int column);
 ASTNode* ast_new_get(ASTNode* object, const char* property, int line, int column);
 ASTNode* ast_new_set(ASTNode* object, const char* property, ASTNode* value, int line, int column);
+ASTNode* ast_new_set_compound(ASTNode* object, const char* property, BinaryOp op, ASTNode* value, int line, int column);
 ASTNode* ast_new_self(int line, int column);
 ASTNode* ast_new_grouping(ASTNode* expression, int line, int column);
 ASTNode* ast_new_var_decl(const char* name, ASTNode* initializer, int line, int column);

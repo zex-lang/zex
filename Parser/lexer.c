@@ -156,11 +156,17 @@ static Token string(Lexer* lexer) {
     int start_line = lexer->line;
     
     while (peek(lexer) != '"' && !is_at_end(lexer)) {
-        if (peek(lexer) == '\n') {
+        if (peek(lexer) == '\\' && peek_next(lexer) != '\0') {
+            /* Escape sequence - skip both characters */
+            advance(lexer);
+            advance(lexer);
+        } else if (peek(lexer) == '\n') {
             lexer->line++;
             lexer->column = 0;
+            advance(lexer);
+        } else {
+            advance(lexer);
         }
-        advance(lexer);
     }
     
     if (is_at_end(lexer)) {

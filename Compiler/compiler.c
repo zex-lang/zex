@@ -368,6 +368,55 @@ static void compile_set(ASTNode* node, int dest_reg) {
     free_reg(2);
 }
 
+static void compile_set_compound(ASTNode* node, int dest_reg) {
+    int obj_reg = alloc_reg();
+    int old_val_reg = alloc_reg();
+    int new_val_reg = alloc_reg();
+    
+    /* Get the object */
+    compile_expression(node->as.set_compound.object, obj_reg);
+    
+    /* Get current property value */
+    int idx = identifier_constant(node->as.set_compound.property);
+    emit_byte(OP_GET_PROPERTY, node->line);
+    emit_byte(old_val_reg, node->line);
+    emit_byte(obj_reg, node->line);
+    emit_byte16(idx, node->line);
+    
+    /* Compile the right-hand value */
+    compile_expression(node->as.set_compound.value, new_val_reg);
+    
+    /* Perform the operation */
+    OpCode op;
+    switch (node->as.set_compound.op) {
+        case BINOP_ADD: op = OP_ADD; break;
+        case BINOP_SUB: op = OP_SUB; break;
+        case BINOP_MUL: op = OP_MUL; break;
+        case BINOP_DIV: op = OP_DIV; break;
+        default: op = OP_ADD; break;
+    }
+    
+    emit_byte(op, node->line);
+    emit_byte(old_val_reg, node->line);  /* Result goes into old_val_reg */
+    emit_byte(old_val_reg, node->line);
+    emit_byte(new_val_reg, node->line);
+    
+    /* Set the property with the new value */
+    emit_byte(OP_SET_PROPERTY, node->line);
+    emit_byte(obj_reg, node->line);
+    emit_byte16(idx, node->line);
+    emit_byte(old_val_reg, node->line);
+    
+    /* Result is the new value */
+    if (dest_reg != old_val_reg) {
+        emit_byte(OP_MOVE, node->line);
+        emit_byte(dest_reg, node->line);
+        emit_byte(old_val_reg, node->line);
+    }
+    
+    free_reg(3);
+}
+
 static void compile_self(ASTNode* node, int dest_reg) {
     /* 'self' is always in register 0 for methods */
     if (dest_reg != 0) {
@@ -415,6 +464,9 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             break;
         case AST_SET:
             compile_set(node, dest_reg);
+            break;
+        case AST_SET_COMPOUND:
+            compile_set_compound(node, dest_reg);
             break;
         case AST_SELF:
             compile_self(node, dest_reg);
@@ -561,6 +613,12 @@ static void compile_expr_stmt(ASTNode* node) {
     }
     if (expr->type == AST_COMPOUND_ASSIGN) {
         compile_compound_assign(expr);
+        return;
+    }
+    if (expr->type == AST_SET_COMPOUND) {
+        int reg = alloc_reg();
+        compile_set_compound(expr, reg);
+        free_reg(1);
         return;
     }
     
