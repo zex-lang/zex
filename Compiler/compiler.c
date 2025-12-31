@@ -74,7 +74,7 @@ static void patch_jump(int offset) {
     int jump = current_chunk()->count - offset - 2;
     
     if (jump > UINT16_MAX) {
-        fprintf(stderr, "Jump too large\n");
+        error_compile(0, "Jump too large");
         current->had_error = true;
         return;
     }
@@ -86,7 +86,7 @@ static void patch_jump(int offset) {
 static int make_constant(Value value) {
     int constant = chunk_add_constant(current_chunk(), value);
     if (constant > UINT16_MAX) {
-        fprintf(stderr, "Too many constants in one chunk\n");
+        error_compile(0, "Too many constants in one chunk");
         current->had_error = true;
         return 0;
     }
@@ -99,7 +99,7 @@ static int identifier_constant(const char* name) {
 
 static int alloc_reg(void) {
     if (current->next_reg >= 256) {
-        fprintf(stderr, "Too many registers in use\n");
+        error_compile(0, "Too many registers in use");
         current->had_error = true;
         return 0;
     }
@@ -259,7 +259,7 @@ static void compile_binary(ASTNode* node, int dest_reg) {
         case BINOP_GT:  op = OP_GT; break;
         case BINOP_GE:  op = OP_GE; break;
         default:
-            fprintf(stderr, "Unknown binary op\n");
+            error_compile(node->line, "Unknown binary operator");
             current->had_error = true;
             free_reg(2);
             return;
@@ -423,7 +423,7 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             compile_grouping(node, dest_reg);
             break;
         default:
-            fprintf(stderr, "Unknown expression type: %d\n", node->type);
+            error_compile(node->line, "Unknown expression type: %d", node->type);
             current->had_error = true;
             break;
     }
@@ -441,12 +441,12 @@ static void compile_var_decl(ASTNode* node) {
         /* Local variable */
         int slot = scope_add_local(&current->scope, name, len);
         if (slot == -1) {
-            fprintf(stderr, "Too many local variables\n");
+            error_compile(node->line, "Too many local variables");
             current->had_error = true;
             return;
         }
         if (slot == -2) {
-            fprintf(stderr, "Variable '%s' already declared in this scope\n", name);
+            error_compile(node->line, "Variable '%s' already declared in this scope", name);
             current->had_error = true;
             return;
         }
@@ -715,7 +715,7 @@ static void compile_do_while(ASTNode* node) {
 
 static void compile_break(ASTNode* node) {
     if (current->loop_depth == 0) {
-        fprintf(stderr, "[line %d] Error: 'break' outside of loop\n", node->line);
+        error_compile(node->line, "'break' outside of loop");
         current->had_error = true;
         return;
     }
@@ -736,7 +736,7 @@ static void compile_break(ASTNode* node) {
 
 static void compile_continue(ASTNode* node) {
     if (current->loop_depth == 0) {
-        fprintf(stderr, "[line %d] Error: 'continue' outside of loop\n", node->line);
+        error_compile(node->line, "'continue' outside of loop");
         current->had_error = true;
         return;
     }
@@ -913,7 +913,7 @@ static void compile_node(ASTNode* node, int dest_reg) {
                 compile_expression(node, reg);
                 free_reg(1);
             } else {
-                fprintf(stderr, "Unknown node type: %d\n", node->type);
+                error_compile(node->line, "Unknown node type: %d", node->type);
                 current->had_error = true;
             }
             break;

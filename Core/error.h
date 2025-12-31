@@ -42,8 +42,14 @@ bool error_had_error(void);
 /* Reset error state */
 void error_reset(void);
 
-/* Print formatted error message (printf-style) */
+/* Print formatted error message */
 void error_reportf(ErrorType type, SourceLoc loc, const char* hint, 
                    const char* format, ...) __attribute__((format(printf, 4, 5)));
+
+/* Compile-time error with optional line number */
+void error_compile(int line, const char* format, ...) __attribute__((format(printf, 2, 3)));
+
+/* Runtime error with formatted message */
+void error_runtime(const char* format, ...) __attribute__((format(printf, 1, 2)));
 
 #endif /* ZEX_ERROR_H */

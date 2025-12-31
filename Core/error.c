@@ -155,3 +155,47 @@ void error_reportf(ErrorType type, SourceLoc loc, const char* hint,
     
     error_report(type, loc, buffer, hint);
 }
+
+void error_compile(int line, const char* format, ...) {
+    g_had_error = true;
+    
+    fprintf(stderr, "\n");
+    fprintf(stderr, "%s%s── Compile Error %s", COLOR_BOLD, COLOR_RED, COLOR_RESET);
+    fprintf(stderr, "%s", COLOR_DIM);
+    for (int i = 0; i < 47; i++) {
+        fprintf(stderr, "─");
+    }
+    fprintf(stderr, "%s\n", COLOR_RESET);
+    fprintf(stderr, "\n");
+    
+    if (line > 0) {
+        fprintf(stderr, "%s[line %d]%s ", COLOR_CYAN, line, COLOR_RESET);
+    }
+    
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    
+    fprintf(stderr, "\n\n");
+}
+
+void error_runtime(const char* format, ...) {
+    g_had_error = true;
+    
+    fprintf(stderr, "\n");
+    fprintf(stderr, "%s%s── Runtime Error %s", COLOR_BOLD, COLOR_RED, COLOR_RESET);
+    fprintf(stderr, "%s", COLOR_DIM);
+    for (int i = 0; i < 47; i++) {
+        fprintf(stderr, "─");
+    }
+    fprintf(stderr, "%s\n", COLOR_RESET);
+    fprintf(stderr, "\n");
+    
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    
+    fprintf(stderr, "\n");
+}
