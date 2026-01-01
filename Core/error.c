@@ -80,8 +80,7 @@ void error_report(ErrorType type, SourceLoc loc, const char* message, const char
     fprintf(stderr, "\n");
     
     /* Header */
-    fprintf(stderr, "%s%s── %s %s", COLOR_BOLD, COLOR_RED, error_type_name(type), COLOR_RESET);
-    fprintf(stderr, "%s", COLOR_DIM);
+    fprintf(stderr, "%s%s── %s ", COLOR_BOLD, COLOR_RED, error_type_name(type));
     for (int i = 0; i < 50 - (int)strlen(error_type_name(type)); i++) {
         fprintf(stderr, "─");
     }
@@ -164,8 +163,7 @@ void error_compile(int line, const char* format, ...) {
     g_had_error = true;
     
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s%s── Compile Error %s", COLOR_BOLD, COLOR_RED, COLOR_RESET);
-    fprintf(stderr, "%s", COLOR_DIM);
+    fprintf(stderr, "%s%s── Compile Error ", COLOR_BOLD, COLOR_RED);
     for (int i = 0; i < 47; i++) {
         fprintf(stderr, "─");
     }
@@ -188,8 +186,7 @@ void error_runtime(const char* format, ...) {
     g_had_error = true;
     
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s%s── Runtime Error %s", COLOR_BOLD, COLOR_RED, COLOR_RESET);
-    fprintf(stderr, "%s", COLOR_DIM);
+    fprintf(stderr, "%s%s── Runtime Error ", COLOR_BOLD, COLOR_RED);
     for (int i = 0; i < 47; i++) {
         fprintf(stderr, "─");
     }
