@@ -121,8 +121,8 @@ void zex_error(ErrorType type, int line, int column, int span,
     
     fprintf(stderr, "\n");
     
-    /* Source line and pointer */
-    if (line_length > 0 && column > 0) {
+    /* Source line (always show if available) */
+    if (line_length > 0) {
         /* Find leading whitespace count */
         int leading_spaces = 0;
         while (leading_spaces < line_length && 
@@ -132,20 +132,22 @@ void zex_error(ErrorType type, int line, int column, int span,
         
         fprintf(stderr, "  %.*s\n", line_length - leading_spaces, line_start + leading_spaces);
         
-        /* Pointer under error */
-        fprintf(stderr, "  ");
-        int adjusted_col = column - 1 - leading_spaces;
-        if (adjusted_col < 0) adjusted_col = 0;
-        
-        for (int i = 0; i < adjusted_col; i++) {
-            fprintf(stderr, " ");
+        /* Pointer under error (only when we have accurate column info) */
+        if (column > 0) {
+            fprintf(stderr, "  ");
+            int adjusted_col = column - 1 - leading_spaces;
+            if (adjusted_col < 0) adjusted_col = 0;
+            
+            for (int i = 0; i < adjusted_col; i++) {
+                fprintf(stderr, " ");
+            }
+            fprintf(stderr, "%s%s", COLOR_RED, COLOR_BOLD);
+            int underline_len = span > 0 ? span : 1;
+            for (int i = 0; i < underline_len; i++) {
+                fprintf(stderr, "^");
+            }
+            fprintf(stderr, "%s\n", COLOR_RESET);
         }
-        fprintf(stderr, "%s%s", COLOR_RED, COLOR_BOLD);
-        int underline_len = span > 0 ? span : 1;
-        for (int i = 0; i < underline_len; i++) {
-            fprintf(stderr, "^");
-        }
-        fprintf(stderr, "%s\n", COLOR_RESET);
     }
     
     /* Stack trace (only if we have frames) */
