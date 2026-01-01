@@ -19,14 +19,18 @@
 
 /* Command line options */
 static struct option long_options[] = {
-    {"dump-ast",      no_argument, NULL, 'a'},
-    {"dump-bytecode", no_argument, NULL, 'b'},
-    {"help",          no_argument, NULL, 'h'},
-    {"version",       no_argument, NULL, 'v'},
+    {"compile",       no_argument,       NULL, 'c'},
+    {"output",        required_argument, NULL, 'o'},
+    {"dump-ast",      no_argument,       NULL, 'a'},
+    {"dump-bytecode", no_argument,       NULL, 'b'},
+    {"help",          no_argument,       NULL, 'h'},
+    {"version",       no_argument,       NULL, 'v'},
     {NULL, 0, NULL, 0}
 };
 
 typedef struct {
+    bool compile;
+    const char* output;
     bool dump_ast;
     bool dump_bytecode;
     const char* script_path;
@@ -34,12 +38,14 @@ typedef struct {
 
 static void print_usage(const char* program) {
     printf("Zex Programming Language v%s\n\n", ZEX_VERSION_STRING);
-    printf("Usage: %s [options] <script.zex>\n\n", program);
+    printf("Usage: %s [options] <script>\n\n", program);
     printf("Options:\n");
-    printf("  --dump-ast       Print the Abstract Syntax Tree\n");
-    printf("  --dump-bytecode  Print the compiled bytecode\n");
-    printf("  --help, -h       Show this help message\n");
-    printf("  --version, -v    Show version information\n");
+    printf("  -c, --compile        Compile to bytecode file\n");
+    printf("  -o, --output <file>  Output file for --compile\n");
+    printf("  --dump-ast           Print the Abstract Syntax Tree\n");
+    printf("  --dump-bytecode      Print the compiled bytecode\n");
+    printf("  -h, --help           Show this help message\n");
+    printf("  -v, --version        Show version information\n");
 }
 
 static void print_version(void) {
@@ -78,46 +84,132 @@ static char* read_file(const char* path) {
     return buffer;
 }
 
-static int run_file(const char* path, Options* opts) {
+static char* get_default_output(const char* input_path) {
+    size_t len = strlen(input_path);
+    char* out = malloc(len + 2);
+    strcpy(out, input_path);
+    
+    /* Replace .zex with .zexc or append .zexc */
+    if (len > 4 && strcmp(input_path + len - 4, ".zex") == 0) {
+        out[len - 4] = '\0';
+        strcat(out, ".zexc");
+    } else {
+        strcat(out, ".zexc");
+    }
+    return out;
+}
+
+static int compile_file(const char* path, Options* opts) {
     char* source = read_file(path);
     if (source == NULL) {
-        return 74;  /* EX_IOERR */
+        return 74;
     }
     
-    /* Initialize VM and builtins first (needed for compilation) */
     VM* vm = vm_get();
     vm_init(vm);
     register_builtins(vm);
     
     error_init(path, source);
     
-    /* Parse to AST */
     ASTNode* ast = parse(source);
     if (ast == NULL) {
         free(source);
         vm_free(vm);
-        return 65;  /* EX_DATAERR */
+        return 65;
     }
     
-    /* Dump AST if requested */
-    if (opts->dump_ast) {
-        ast_print(ast, 0);
-        printf("\n");
-    }
-    
-    /* Compile to bytecode */
     CompileResult compiled = compile(ast);
     ast_free(ast);
     
     if (compiled.had_error || compiled.function == NULL) {
         free(source);
         vm_free(vm);
-        return 65;  /* EX_DATAERR */
+        return 65;
     }
     
-    /* Dump bytecode if requested */
+    char* output = opts->output ? (char*)opts->output : get_default_output(path);
+    
+    if (!bytecode_save(compiled.function, output)) {
+        fprintf(stderr, "Error: Could not write bytecode to '%s'\n", output);
+        if (!opts->output) free(output);
+        free(source);
+        vm_free(vm);
+        return 74;
+    }
+    
+    if (!opts->output) free(output);
+    free(source);
+    vm_free(vm);
+    return 0;
+}
+
+static int run_bytecode(const char* path, Options* opts) {
+    VM* vm = vm_get();
+    vm_init(vm);
+    register_builtins(vm);
+    
+    ObjFunction* fn = bytecode_load(path);
+    if (fn == NULL) {
+        fprintf(stderr, "Error: Could not load bytecode from '%s'\n", path);
+        vm_free(vm);
+        return 65;
+    }
+    
     if (opts->dump_bytecode) {
-        /* Extract basename from path */
+        const char* basename = path;
+        const char* p = path;
+        while (*p) {
+            if (*p == '/') basename = p + 1;
+            p++;
+        }
+        chunk_disassemble(fn->chunk, basename);
+        printf("\n");
+        vm_free(vm);
+        return 0;
+    }
+    
+    InterpretResult result = vm_run(vm, fn);
+    vm_free(vm);
+    
+    if (result == INTERPRET_COMPILE_ERROR) return 65;
+    if (result == INTERPRET_RUNTIME_ERROR) return 70;
+    return 0;
+}
+
+static int run_source(const char* path, Options* opts) {
+    char* source = read_file(path);
+    if (source == NULL) {
+        return 74;
+    }
+    
+    VM* vm = vm_get();
+    vm_init(vm);
+    register_builtins(vm);
+    
+    error_init(path, source);
+    
+    ASTNode* ast = parse(source);
+    if (ast == NULL) {
+        free(source);
+        vm_free(vm);
+        return 65;
+    }
+    
+    if (opts->dump_ast) {
+        ast_print(ast, 0);
+        printf("\n");
+    }
+    
+    CompileResult compiled = compile(ast);
+    ast_free(ast);
+    
+    if (compiled.had_error || compiled.function == NULL) {
+        free(source);
+        vm_free(vm);
+        return 65;
+    }
+    
+    if (opts->dump_bytecode) {
         const char* basename = path;
         const char* p = path;
         while (*p) {
@@ -128,31 +220,47 @@ static int run_file(const char* path, Options* opts) {
         printf("\n");
     }
     
-    /* If only dumping, don't run */
     if (opts->dump_ast || opts->dump_bytecode) {
         free(source);
         vm_free(vm);
         return 0;
     }
     
-    /* Run the program */
     InterpretResult result = vm_run(vm, compiled.function);
     
     free(source);
     vm_free(vm);
     
-    if (result == INTERPRET_COMPILE_ERROR) return 65;  /* EX_DATAERR */
-    if (result == INTERPRET_RUNTIME_ERROR) return 70;  /* EX_SOFTWARE */
+    if (result == INTERPRET_COMPILE_ERROR) return 65;
+    if (result == INTERPRET_RUNTIME_ERROR) return 70;
     
     return 0;
 }
 
+static int run_file(const char* path, Options* opts) {
+    if (opts->compile) {
+        return compile_file(path, opts);
+    }
+    
+    if (bytecode_is_compiled(path)) {
+        return run_bytecode(path, opts);
+    }
+    
+    return run_source(path, opts);
+}
+
 int main(int argc, char* argv[]) {
-    Options opts = {false, false, NULL};
+    Options opts = {false, NULL, false, false, NULL};
     
     int opt;
-    while ((opt = getopt_long(argc, argv, "abhv", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "co:abhv", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'c':
+                opts.compile = true;
+                break;
+            case 'o':
+                opts.output = optarg;
+                break;
             case 'a':
                 opts.dump_ast = true;
                 break;
@@ -167,17 +275,17 @@ int main(int argc, char* argv[]) {
                 return 0;
             default:
                 print_usage(argv[0]);
-                return 64;  /* EX_USAGE */
+                return 64;
         }
     }
     
-    /* Get the script path (remaining argument) */
     if (optind >= argc) {
         print_usage(argv[0]);
-        return 64;  /* EX_USAGE */
+        return 64;
     }
     
     opts.script_path = argv[optind];
     
     return run_file(opts.script_path, &opts);
 }
+

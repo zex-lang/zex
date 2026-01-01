@@ -131,4 +131,9 @@ void chunk_disassemble(Chunk* chunk, const char* name);
 /* Disassemble single instruction, returns next offset */
 int chunk_disassemble_instruction(Chunk* chunk, int offset);
 
+/* Bytecode file serialization */
+bool bytecode_save(ObjFunction* fn, const char* path);
+ObjFunction* bytecode_load(const char* path);
+bool bytecode_is_compiled(const char* path);
+
 #endif /* ZEX_BYTECODE_H */

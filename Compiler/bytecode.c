@@ -8,6 +8,11 @@
 #include "stringobject.h"
 #include "classobject.h"
 #include "funcobject.h"
+#include "intobject.h"
+#include "floatobject.h"
+#include "boolobject.h"
+#include "nullobject.h"
+#include <string.h>
 
 /* Magic number bytes */
 const uint8_t ZEX_MAGIC[12] = {
@@ -98,12 +103,12 @@ int opcode_operand_count(OpCode op) {
         case OP_GT:
         case OP_GE:
         case OP_CALL:
-        case OP_GET_PROPERTY:
-        case OP_SET_PROPERTY:
             return 4;
             
+        case OP_GET_PROPERTY:
+        case OP_SET_PROPERTY:
         case OP_METHOD:
-            return 3;
+            return 4;
             
         case OP_INVOKE:
             return 5;
@@ -298,12 +303,30 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
             return constant_instruction("CLOSURE", chunk, offset);
         case OP_CLASS:
             return constant_instruction("CLASS", chunk, offset);
-        case OP_GET_PROPERTY:
-            return three_register_instruction("GET_PROPERTY", chunk, offset);
-        case OP_SET_PROPERTY:
-            return three_register_instruction("SET_PROPERTY", chunk, offset);
-        case OP_METHOD:
-            return two_register_instruction("METHOD", chunk, offset);
+        case OP_GET_PROPERTY: {
+            uint8_t dst = chunk->code[offset + 1];
+            uint8_t obj = chunk->code[offset + 2];
+            uint16_t idx = chunk->code[offset + 3] | (chunk->code[offset + 4] << 8);
+            printf("%-16s R%d, R%d, '%s'\n", "GET_PROPERTY", dst, obj,
+                   AS_STRING(chunk->constants[idx])->chars);
+            return offset + 5;
+        }
+        case OP_SET_PROPERTY: {
+            uint8_t obj = chunk->code[offset + 1];
+            uint16_t idx = chunk->code[offset + 2] | (chunk->code[offset + 3] << 8);
+            uint8_t val = chunk->code[offset + 4];
+            printf("%-16s R%d, '%s', R%d\n", "SET_PROPERTY", obj,
+                   AS_STRING(chunk->constants[idx])->chars, val);
+            return offset + 5;
+        }
+        case OP_METHOD: {
+            uint8_t class_reg = chunk->code[offset + 1];
+            uint16_t name_idx = chunk->code[offset + 2] | (chunk->code[offset + 3] << 8);
+            uint8_t method_reg = chunk->code[offset + 4];
+            printf("%-16s R%d, '%s', R%d\n", "METHOD", class_reg,
+                   AS_STRING(chunk->constants[name_idx])->chars, method_reg);
+            return offset + 5;
+        }
         case OP_INVOKE: {
             uint8_t rdst = chunk->code[offset + 1];
             uint8_t robj = chunk->code[offset + 2];
@@ -358,8 +381,336 @@ void chunk_disassemble(Chunk* chunk, const char* name) {
             ObjFunction* fn = (ObjFunction*)constant.obj;
             if (fn->chunk != NULL && fn->chunk->count > 0) {
                 printf("\n");
-                chunk_disassemble(fn->chunk, fn->name ? fn->name->chars : "<anonymous>");
+            chunk_disassemble(fn->chunk, fn->name ? fn->name->chars : "<anonymous>");
             }
         }
     }
+}
+
+#define TAG_NULL    0
+#define TAG_BOOL    1
+#define TAG_INT     2
+#define TAG_FLOAT   3
+#define TAG_STRING  4
+#define TAG_FUNC    5
+
+static bool write_u8(FILE* f, uint8_t val) {
+    return fwrite(&val, 1, 1, f) == 1;
+}
+
+static bool write_u16(FILE* f, uint16_t val) {
+    uint8_t bytes[2] = {val & 0xFF, (val >> 8) & 0xFF};
+    return fwrite(bytes, 1, 2, f) == 2;
+}
+
+static bool write_u32(FILE* f, uint32_t val) {
+    uint8_t bytes[4] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF};
+    return fwrite(bytes, 1, 4, f) == 4;
+}
+
+static bool write_i64(FILE* f, int64_t val) {
+    return fwrite(&val, sizeof(int64_t), 1, f) == 1;
+}
+
+static bool write_f64(FILE* f, double val) {
+    return fwrite(&val, sizeof(double), 1, f) == 1;
+}
+
+static bool write_string(FILE* f, ObjString* str) {
+    if (!write_u32(f, str->length)) return false;
+    return fwrite(str->chars, 1, str->length, f) == (size_t)str->length;
+}
+
+static bool write_value(FILE* f, Value val);
+static bool write_chunk(FILE* f, Chunk* chunk);
+
+static bool write_function(FILE* f, ObjFunction* fn) {
+    /* Function name */
+    bool has_name = fn->name != NULL;
+    if (!write_u8(f, has_name ? 1 : 0)) return false;
+    if (has_name && !write_string(f, fn->name)) return false;
+    
+    /* Arity */
+    if (!write_u8(f, fn->arity)) return false;
+    
+    /* Chunk */
+    return write_chunk(f, fn->chunk);
+}
+
+static bool write_value(FILE* f, Value v) {
+    if (v.obj == NULL || IS_NULL(v)) {
+        return write_u8(f, TAG_NULL);
+    }
+    
+    switch (v.obj->type) {
+        case OBJ_BOOL: {
+            if (!write_u8(f, TAG_BOOL)) return false;
+            ObjBool* b = (ObjBool*)v.obj;
+            return write_u8(f, b->value ? 1 : 0);
+        }
+        case OBJ_INT: {
+            if (!write_u8(f, TAG_INT)) return false;
+            ObjInt* i = (ObjInt*)v.obj;
+            return write_i64(f, i->value);
+        }
+        case OBJ_FLOAT: {
+            if (!write_u8(f, TAG_FLOAT)) return false;
+            ObjFloat* fl = (ObjFloat*)v.obj;
+            return write_f64(f, fl->value);
+        }
+        case OBJ_STRING: {
+            if (!write_u8(f, TAG_STRING)) return false;
+            return write_string(f, AS_STRING(v));
+        }
+        case OBJ_FUNCTION: {
+            if (!write_u8(f, TAG_FUNC)) return false;
+            return write_function(f, (ObjFunction*)v.obj);
+        }
+        default:
+            return write_u8(f, TAG_NULL);
+    }
+}
+
+static bool write_chunk(FILE* f, Chunk* chunk) {
+    /* Constants */
+    if (!write_u16(f, chunk->const_count)) return false;
+    for (int i = 0; i < chunk->const_count; i++) {
+        if (!write_value(f, chunk->constants[i])) return false;
+    }
+    
+    /* Code */
+    if (!write_u32(f, chunk->count)) return false;
+    if (chunk->count > 0 && fwrite(chunk->code, 1, chunk->count, f) != (size_t)chunk->count) {
+        return false;
+    }
+    
+    /* Lines */
+    for (int i = 0; i < chunk->count; i++) {
+        if (!write_u32(f, chunk->lines[i])) return false;
+    }
+    
+    return true;
+}
+
+bool bytecode_save(ObjFunction* fn, const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return false;
+    
+    /* Magic number */
+    if (fwrite(ZEX_MAGIC, 1, 12, f) != 12) {
+        fclose(f);
+        return false;
+    }
+    
+    /* Version */
+    if (!write_u16(f, ZEX_BYTECODE_VERSION)) {
+        fclose(f);
+        return false;
+    }
+    
+    /* Function */
+    bool ok = write_function(f, fn);
+    fclose(f);
+    return ok;
+}
+
+/* Reading functions */
+
+static bool read_u8(FILE* f, uint8_t* val) {
+    return fread(val, 1, 1, f) == 1;
+}
+
+static bool read_u16(FILE* f, uint16_t* val) {
+    uint8_t bytes[2];
+    if (fread(bytes, 1, 2, f) != 2) return false;
+    *val = bytes[0] | (bytes[1] << 8);
+    return true;
+}
+
+static bool read_u32(FILE* f, uint32_t* val) {
+    uint8_t bytes[4];
+    if (fread(bytes, 1, 4, f) != 4) return false;
+    *val = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+    return true;
+}
+
+static bool read_i64(FILE* f, int64_t* val) {
+    return fread(val, sizeof(int64_t), 1, f) == 1;
+}
+
+static bool read_f64(FILE* f, double* val) {
+    return fread(val, sizeof(double), 1, f) == 1;
+}
+
+static ObjString* read_string(FILE* f) {
+    uint32_t len;
+    if (!read_u32(f, &len)) return NULL;
+    
+    char* buf = ALLOCATE(char, len + 1);
+    if (fread(buf, 1, len, f) != len) {
+        FREE_ARRAY(char, buf, len + 1);
+        return NULL;
+    }
+    buf[len] = '\0';
+    
+    ObjString* str = new_string(buf, len);
+    FREE_ARRAY(char, buf, len + 1);
+    return str;
+}
+
+static Value read_value(FILE* f);
+static Chunk* read_chunk(FILE* f);
+
+static ObjFunction* read_function(FILE* f) {
+    /* Name */
+    uint8_t has_name;
+    if (!read_u8(f, &has_name)) return NULL;
+    
+    ObjString* name = NULL;
+    if (has_name) {
+        name = read_string(f);
+        if (!name) return NULL;
+    }
+    
+    /* Arity */
+    uint8_t arity;
+    if (!read_u8(f, &arity)) return NULL;
+    
+    /* Chunk */
+    Chunk* chunk = read_chunk(f);
+    if (!chunk) return NULL;
+    
+    ObjFunction* fn = new_function();
+    fn->name = name;
+    fn->arity = arity;
+    fn->chunk = chunk;
+    
+    return fn;
+}
+
+static Value read_value(FILE* f) {
+    uint8_t tag;
+    if (!read_u8(f, &tag)) return NULL_VAL;
+    
+    switch (tag) {
+        case TAG_NULL:
+            return NULL_VAL;
+        case TAG_BOOL: {
+            uint8_t val;
+            if (!read_u8(f, &val)) return NULL_VAL;
+            return BOOL_VAL(val != 0);
+        }
+        case TAG_INT: {
+            int64_t val;
+            if (!read_i64(f, &val)) return NULL_VAL;
+            return INT_VAL(val);
+        }
+        case TAG_FLOAT: {
+            double val;
+            if (!read_f64(f, &val)) return NULL_VAL;
+            return FLOAT_VAL(val);
+        }
+        case TAG_STRING: {
+            ObjString* str = read_string(f);
+            if (!str) return NULL_VAL;
+            return OBJ_VAL(str);
+        }
+        case TAG_FUNC: {
+            ObjFunction* fn = read_function(f);
+            if (!fn) return NULL_VAL;
+            return OBJ_VAL(fn);
+        }
+        default:
+            return NULL_VAL;
+    }
+}
+
+static Chunk* read_chunk(FILE* f) {
+    Chunk* chunk = ALLOCATE(Chunk, 1);
+    chunk_init(chunk);
+    
+    /* Constants */
+    uint16_t const_count;
+    if (!read_u16(f, &const_count)) {
+        chunk_free(chunk);
+        FREE(Chunk, chunk);
+        return NULL;
+    }
+    
+    for (int i = 0; i < const_count; i++) {
+        Value val = read_value(f);
+        chunk_add_constant(chunk, val);
+    }
+    
+    /* Code */
+    uint32_t code_len;
+    if (!read_u32(f, &code_len)) {
+        chunk_free(chunk);
+        FREE(Chunk, chunk);
+        return NULL;
+    }
+    
+    if (code_len > 0) {
+        chunk->code = ALLOCATE(uint8_t, code_len);
+        chunk->capacity = code_len;
+        chunk->count = code_len;
+        if (fread(chunk->code, 1, code_len, f) != code_len) {
+            chunk_free(chunk);
+            FREE(Chunk, chunk);
+            return NULL;
+        }
+        
+        /* Lines */
+        chunk->lines = ALLOCATE(int, code_len);
+        for (uint32_t i = 0; i < code_len; i++) {
+            uint32_t line;
+            if (!read_u32(f, &line)) {
+                chunk_free(chunk);
+                FREE(Chunk, chunk);
+                return NULL;
+            }
+            chunk->lines[i] = line;
+        }
+    }
+    
+    return chunk;
+}
+
+ObjFunction* bytecode_load(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return NULL;
+    
+    /* Magic number */
+    uint8_t magic[12];
+    if (fread(magic, 1, 12, f) != 12 || memcmp(magic, ZEX_MAGIC, 12) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    
+    /* Version */
+    uint16_t version;
+    if (!read_u16(f, &version) || version != ZEX_BYTECODE_VERSION) {
+        fclose(f);
+        return NULL;
+    }
+    
+    /* Function */
+    ObjFunction* fn = read_function(f);
+    fclose(f);
+    return fn;
+}
+
+bool bytecode_is_compiled(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+    
+    uint8_t magic[12];
+    bool is_compiled = false;
+    
+    if (fread(magic, 1, 12, f) == 12) {
+        is_compiled = (memcmp(magic, ZEX_MAGIC, 12) == 0);
+    }
+    
+    fclose(f);
+    return is_compiled;
 }
