@@ -21,6 +21,7 @@ set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-flto=auto -Wl,--gc-sections")
 set(CORE_SRC
     Core/memory.c
     Core/error.c
+    Core/utf8.c
 )
 
 set(OBJECTS_SRC

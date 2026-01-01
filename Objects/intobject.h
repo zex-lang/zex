@@ -18,7 +18,7 @@ typedef struct {
 ObjInt* new_int(int64_t value);
 
 /* Get integer value from Value */
-#define AS_INT(value)   (((ObjInt*)AS_OBJ(value))->value)
+#define AS_INT(v)   (((ObjInt*)AS_OBJ(v))->value)
 
 /* Create Value from int64_t */
 #define INT_VAL(val)    OBJ_VAL(new_int(val))

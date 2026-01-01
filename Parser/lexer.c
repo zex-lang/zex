@@ -160,10 +160,10 @@ static Token number(Lexer* lexer) {
     return make_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INT);
 }
 
-static Token string(Lexer* lexer) {
+static Token string(Lexer* lexer, char quote) {
     int start_line = lexer->line;
     
-    while (peek(lexer) != '"' && !is_at_end(lexer)) {
+    while (peek(lexer) != quote && !is_at_end(lexer)) {
         if (peek(lexer) == '\\' && peek_next(lexer) != '\0') {
             /* Escape sequence - skip both characters */
             advance(lexer);
@@ -246,8 +246,9 @@ Token lexer_scan_token(Lexer* lexer) {
             if (match(lexer, '|')) return make_token(lexer, TOKEN_OR_OR);
             return error_token(lexer, "Expected '||' for logical OR");
         
-        /* String literal */
-        case '"': return string(lexer);
+        /* String literals */
+        case '"': return string(lexer, '"');
+        case '\'': return string(lexer, '\'');
         
         /* Newline */
         case '\n':

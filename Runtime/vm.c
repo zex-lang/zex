@@ -291,6 +291,26 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
     }
 }
 
+/* Get the class for any value (for method lookup) */
+static ObjClass* get_value_class(Value val) {
+    if (IS_INSTANCE(val)) return ((ObjInstance*)val.obj)->obj.klass;
+    if (IS_ARRAY(val)) return get_array_class();
+    if (IS_STRING(val)) return get_string_class();
+    if (IS_INT(val)) return get_int_class();
+    if (IS_FLOAT(val)) return get_float_class();
+    if (IS_BOOL(val)) return get_bool_class();
+    return NULL;
+}
+
+/* Look up method on any value */
+static bool get_builtin_method(Value receiver, ObjString* name, Value* method) {
+    ObjClass* klass = get_value_class(receiver);
+    if (klass && table_get(&klass->methods, name, method)) {
+        return true;
+    }
+    return false;
+}
+
 static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
     if (IS_INT(a) && IS_INT(b)) {
         ObjInt* ia = (ObjInt*)a.obj;
@@ -629,20 +649,17 @@ static Value vm_run_frame(VM* vm) {
                     }
                     vm_error(vm, "Undefined method '%s' on class", name->chars);
                     return NULL_VAL;
-                } else if (IS_ARRAY(obj_val)) {
-                    /* Array method lookup */
-                    ObjClass* arr_class = get_array_class();
+                } else {
+                    /* Builtin type method lookup */
                     Value method;
-                    if (arr_class && table_get(&arr_class->methods, name, &method)) {
+                    if (get_builtin_method(obj_val, name, &method)) {
                         ObjBoundMethod* bound = new_bound_method(obj_val, method);
                         REG(dst) = OBJ_VAL(bound);
                         break;
                     }
-                    vm_error(vm, "Undefined method '%s' on array", name->chars);
-                    return NULL_VAL;
                 }
                 
-                vm_error(vm, "Only instances have properties");
+                vm_error(vm, "Undefined property '%s' on '%s'", name->chars, value_type_name(obj_val));
                 return NULL_VAL;
             }
             
@@ -704,28 +721,24 @@ static Value vm_run_frame(VM* vm) {
                     Value result = vm_run_frame(vm);
                     frame = &vm->frames[vm->frame_count - 1];
                     REG(dst) = result;
-                } else if (IS_ARRAY(obj_val)) {
-                    /* Array method call */
-                    ObjClass* arr_class = get_array_class();
+                } else {
+                    /* Builtin type method call */
                     Value method;
-                    if (!arr_class || !table_get(&arr_class->methods, name, &method)) {
-                        vm_error(vm, "Undefined method '%s' on array", name->chars);
+                    if (!get_builtin_method(obj_val, name, &method)) {
+                        vm_error(vm, "Undefined method '%s' on '%s'", name->chars, value_type_name(obj_val));
                         return NULL_VAL;
                     }
                     
-                    /* Array methods are native functions */
+                    /* Builtin methods are native functions */
                     ObjNative* native = (ObjNative*)method.obj;
                     
                     Value args[256];
-                    args[0] = obj_val;  /* self (the array) */
+                    args[0] = obj_val;  /* self */
                     for (int i = 0; i < argc; i++) {
                         args[i + 1] = REG(dst + 1 + i);
                     }
                     
                     REG(dst) = native->function(vm, argc + 1, args);
-                } else {
-                    vm_error(vm, "Only instances and arrays have methods");
-                    return NULL_VAL;
                 }
                 break;
             }
@@ -773,24 +786,42 @@ static Value vm_run_frame(VM* vm) {
                 Value arr_val = REG(arr_reg);
                 Value idx_val = REG(idx_reg);
                 
-                if (!IS_ARRAY(arr_val)) {
-                    vm_error(vm, "Can only index arrays");
-                    return NULL_VAL;
-                }
                 if (!IS_INT(idx_val)) {
-                    vm_error(vm, "Array index must be an integer");
+                    vm_error(vm, "Index must be an integer");
                     return NULL_VAL;
                 }
                 
-                ObjArray* arr = AS_ARRAY(arr_val);
-                int idx = (int)((ObjInt*)idx_val.obj)->value;
+                int idx = (int)AS_INT(idx_val);
                 
-                if (idx < 0 || idx >= arr->count) {
-                    vm_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                if (IS_ARRAY(arr_val)) {
+                    ObjArray* arr = AS_ARRAY(arr_val);
+                    
+                    /* Handle negative index */
+                    if (idx < 0) idx = arr->count + idx;
+                    
+                    if (idx < 0 || idx >= arr->count) {
+                        vm_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                        return NULL_VAL;
+                    }
+                    
+                    REG(dst) = arr->items[idx];
+                } else if (IS_STRING(arr_val)) {
+                    ObjString* str = AS_STRING(arr_val);
+                    
+                    /* Handle negative index */
+                    if (idx < 0) idx = str->char_count + idx;
+                    
+                    if (idx < 0 || idx >= str->char_count) {
+                        vm_error(vm, "String index out of bounds: %d (length: %d)", idx, str->char_count);
+                        return NULL_VAL;
+                    }
+                    
+                    ObjString* ch = string_char_at(str, idx);
+                    REG(dst) = OBJ_VAL(ch);
+                } else {
+                    vm_error(vm, "Can only index arrays and strings");
                     return NULL_VAL;
                 }
-                
-                REG(dst) = arr->items[idx];
                 break;
             }
             
@@ -824,7 +855,7 @@ static Value vm_run_frame(VM* vm) {
             }
             
             case OP_ITER_NEXT: {
-                /* Get next item from array iterator */
+                /* Get next item from array/string iterator */
                 uint8_t val_reg = READ_BYTE();
                 uint8_t idx_reg = READ_BYTE();
                 uint8_t arr_reg = READ_BYTE();
@@ -832,22 +863,35 @@ static Value vm_run_frame(VM* vm) {
                 jump_offset |= (READ_BYTE() << 8);
                 
                 Value arr_val = REG(arr_reg);
-                if (!IS_ARRAY(arr_val)) {
-                    vm_error(vm, "Can only iterate over arrays");
-                    return NULL_VAL;
-                }
-                
-                ObjArray* arr = AS_ARRAY(arr_val);
                 Value idx_val = REG(idx_reg);
-                int64_t idx = (IS_INT(idx_val)) ? ((ObjInt*)idx_val.obj)->value : 0;
+                int64_t idx = (IS_INT(idx_val)) ? AS_INT(idx_val) : 0;
                 
-                if (idx >= arr->count) {
-                    /* Done iterating, jump to end */
-                    frame->ip += jump_offset;
+                if (IS_ARRAY(arr_val)) {
+                    ObjArray* arr = AS_ARRAY(arr_val);
+                    
+                    if (idx >= arr->count) {
+                        /* Done iterating, jump to end */
+                        frame->ip += jump_offset;
+                    } else {
+                        /* Get current item and increment index */
+                        REG(val_reg) = arr->items[idx];
+                        REG(idx_reg) = INT_VAL(idx + 1);
+                    }
+                } else if (IS_STRING(arr_val)) {
+                    ObjString* str = AS_STRING(arr_val);
+                    
+                    if (idx >= str->char_count) {
+                        /* Done iterating, jump to end */
+                        frame->ip += jump_offset;
+                    } else {
+                        /* Get current character and increment index */
+                        ObjString* ch = string_char_at(str, (int)idx);
+                        REG(val_reg) = OBJ_VAL(ch);
+                        REG(idx_reg) = INT_VAL(idx + 1);
+                    }
                 } else {
-                    /* Get current item and increment index */
-                    REG(val_reg) = arr->items[idx];
-                    REG(idx_reg) = INT_VAL(idx + 1);
+                    vm_error(vm, "Can only iterate over arrays and strings");
+                    return NULL_VAL;
                 }
                 break;
             }

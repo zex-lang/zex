@@ -6,6 +6,7 @@
 #include "parser.h"
 #include "error.h"
 #include "memory.h"
+#include "utf8.h"
 #include <errno.h>
 
 /* Current parser instance */
@@ -149,12 +150,136 @@ static ASTNode* number(bool can_assign) {
     }
 }
 
+static int hex_digit_value(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
+static char* process_escape_sequences(const char* src, int src_len, int* out_len) {
+    /* Allocate buffer (may be smaller due to escapes, larger for Unicode) */
+    int capacity = src_len + 16;
+    char* result = ALLOCATE(char, capacity);
+    int dst = 0;
+    
+    for (int i = 0; i < src_len; i++) {
+        if (src[i] == '\\' && i + 1 < src_len) {
+            i++;  /* Skip backslash */
+            switch (src[i]) {
+                case 'n': result[dst++] = '\n'; break;
+                case 't': result[dst++] = '\t'; break;
+                case 'r': result[dst++] = '\r'; break;
+                case '\\': result[dst++] = '\\'; break;
+                case '"': result[dst++] = '"'; break;
+                case '\'': result[dst++] = '\''; break;
+                case '0': result[dst++] = '\0'; break;
+                
+                case 'x': {
+                    /* \xNN - hex byte */
+                    if (i + 2 < src_len) {
+                        int h1 = hex_digit_value(src[i + 1]);
+                        int h2 = hex_digit_value(src[i + 2]);
+                        if (h1 >= 0 && h2 >= 0) {
+                            result[dst++] = (char)((h1 << 4) | h2);
+                            i += 2;
+                            break;
+                        }
+                    }
+                    result[dst++] = '\\';
+                    result[dst++] = 'x';
+                    break;
+                }
+                
+                case 'u': {
+                    uint32_t codepoint = 0;
+                    if (i + 1 < src_len && src[i + 1] == '{') {
+                        /* \u{N...} - 1-6 hex digits */
+                        i += 2;  /* Skip 'u{' */
+                        int digits = 0;
+                        while (i < src_len && src[i] != '}') {
+                            int d = hex_digit_value(src[i]);
+                            if (d < 0) break;
+                            codepoint = (codepoint << 4) | d;
+                            i++;
+                            digits++;
+                        }
+                        if (i < src_len && src[i] == '}' && digits > 0 && digits <= 6) {
+                            /* Expand buffer if needed */
+                            if (dst + 4 >= capacity) {
+                                capacity *= 2;
+                                result = GROW_ARRAY(char, result, capacity / 2, capacity);
+                            }
+                            dst += utf8_encode(codepoint, result + dst);
+                        } else {
+                            result[dst++] = '\\';
+                            result[dst++] = 'u';
+                            i--;  /* Reprocess */
+                        }
+                    } else if (i + 4 < src_len) {
+                        /* \uNNNN - exactly 4 hex digits */
+                        int ok = 1;
+                        for (int j = 1; j <= 4; j++) {
+                            int d = hex_digit_value(src[i + j]);
+                            if (d < 0) { ok = 0; break; }
+                            codepoint = (codepoint << 4) | d;
+                        }
+                        if (ok) {
+                            if (dst + 4 >= capacity) {
+                                capacity *= 2;
+                                result = GROW_ARRAY(char, result, capacity / 2, capacity);
+                            }
+                            dst += utf8_encode(codepoint, result + dst);
+                            i += 4;
+                        } else {
+                            result[dst++] = '\\';
+                            result[dst++] = 'u';
+                        }
+                    } else {
+                        result[dst++] = '\\';
+                        result[dst++] = 'u';
+                    }
+                    break;
+                }
+                
+                default:
+                    /* Unknown escape - keep as-is */
+                    result[dst++] = '\\';
+                    result[dst++] = src[i];
+                    break;
+            }
+        } else {
+            result[dst++] = src[i];
+        }
+        
+        /* Grow buffer if needed */
+        if (dst + 4 >= capacity) {
+            capacity *= 2;
+            result = GROW_ARRAY(char, result, capacity / 2, capacity);
+        }
+    }
+    
+    *out_len = dst;
+    return result;
+}
+
 static ASTNode* string(bool can_assign) {
     UNUSED(can_assign);
     Token token = current_parser->previous;
-    /* Remove quotes */
-    return ast_new_string_literal(token.start + 1, token.length - 2, 
-                                  token.line, token.column);
+    
+    /* Get string content (without quotes) */
+    const char* src = token.start + 1;
+    int src_len = token.length - 2;
+    
+    /* Process escape sequences */
+    int processed_len;
+    char* processed = process_escape_sequences(src, src_len, &processed_len);
+    
+    ASTNode* node = ast_new_string_literal(processed, processed_len, 
+                                           token.line, token.column);
+    
+    FREE_ARRAY(char, processed, processed_len + 1);
+    return node;
 }
 
 static ASTNode* literal(bool can_assign) {

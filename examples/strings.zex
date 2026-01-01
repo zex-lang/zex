@@ -1,0 +1,52 @@
+# Strings in Zex
+
+# String literals (single or double quotes)
+println("Double quotes")
+println('Single quotes')
+
+# Escape sequences
+println("Line 1\nLine 2")
+println("Tab:\there")
+println("Quote: \"quoted\"")
+println("Backslash: \\")
+println("Unicode heart: \u2764")
+println("Emoji: \u{1F600}")
+
+# String properties
+var s = "Hello, World!"
+println("String: " + s)
+println("Length: " + s.len())
+println("Bytes: " + s.bytes())
+
+# String methods
+println("Upper: " + s.upper())
+println("Lower: " + s.lower())
+println("Starts with 'Hello': " + s.starts_with("Hello"))
+println("Ends with '!': " + s.ends_with("!"))
+println("Contains 'World': " + s.contains("World"))
+
+# Slicing
+println("Slice 0-5: " + s.slice(0, 5))
+println("Slice -6 to end: " + s.slice(-6))
+
+# Trim, split, replace
+println("Trim: " + "  hello  ".trim())
+println("Split: " + "a,b,c".split(","))
+println("Replace: " + "hello world".replace("world", "Zex"))
+
+# String indexing
+var word = "Hello"
+println("word[0]: " + word[0])
+println("word[-1]: " + word[-1])
+
+# String iteration
+println("Characters in 'Zex':")
+for var c in "Zex" {
+    println("  " + c)
+}
+
+# UTF-8 support
+var emoji_str = "Hi \u{1F44B}"
+println("Emoji: " + emoji_str)
+println("Emoji length: " + emoji_str.len())
+println("Emoji bytes: " + emoji_str.bytes())
