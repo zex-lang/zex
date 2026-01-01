@@ -117,7 +117,14 @@ static int run_file(const char* path, Options* opts) {
     
     /* Dump bytecode if requested */
     if (opts->dump_bytecode) {
-        chunk_disassemble(compiled.function->chunk);
+        /* Extract basename from path */
+        const char* basename = path;
+        const char* p = path;
+        while (*p) {
+            if (*p == '/') basename = p + 1;
+            p++;
+        }
+        chunk_disassemble(compiled.function->chunk, basename);
         printf("\n");
     }
     

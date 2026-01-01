@@ -303,8 +303,13 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
     }
 }
 
-void chunk_disassemble(Chunk* chunk) {
-    /* First disassemble the main chunk */
+void chunk_disassemble(Chunk* chunk, const char* name) {
+    /* Print header for this chunk */
+    if (name != NULL) {
+        printf("-- %s --\n", name);
+    }
+    
+    /* Disassemble the chunk */
     for (int offset = 0; offset < chunk->count;) {
         offset = chunk_disassemble_instruction(chunk, offset);
     }
@@ -315,8 +320,8 @@ void chunk_disassemble(Chunk* chunk) {
         if (constant.obj != NULL && constant.obj->type == OBJ_FUNCTION) {
             ObjFunction* fn = (ObjFunction*)constant.obj;
             if (fn->chunk != NULL && fn->chunk->count > 0) {
-                printf("\n-- %s --\n", fn->name ? fn->name->chars : "<anonymous>");
-                chunk_disassemble(fn->chunk);
+                printf("\n");
+                chunk_disassemble(fn->chunk, fn->name ? fn->name->chars : "<anonymous>");
             }
         }
     }
