@@ -33,3 +33,34 @@ while n < 5 {
     }
     println("n = " + string(n))
 }
+
+# C-style for loop
+println("C-style for loop:")
+for var i = 0; i < 5; i += 1 {
+    println("i = " + string(i))
+}
+
+# For-in loop (iterate over array)
+println("For-in loop:")
+var fruits = ["apple", "banana", "cherry"]
+for var fruit in fruits {
+    println("Fruit: " + fruit)
+}
+
+# For loop with break
+println("For with break:")
+for var x = 0; x < 10; x += 1 {
+    if x == 3 {
+        break
+    }
+    println("x = " + string(x))
+}
+
+# For loop with continue
+println("For with continue:")
+for var y = 0; y < 5; y += 1 {
+    if y == 2 {
+        continue
+    }
+    println("y = " + string(y))
+}
