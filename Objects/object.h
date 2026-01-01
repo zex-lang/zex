@@ -24,6 +24,7 @@ typedef enum {
     OBJ_INSTANCE,
     OBJ_NATIVE,
     OBJ_BOUND_METHOD,
+    OBJ_ARRAY,
 } ObjType;
 
 /*

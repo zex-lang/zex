@@ -194,6 +194,28 @@ ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** 
     return node;
 }
 
+ASTNode* ast_new_array(ASTNode** elements, int count, int line, int column) {
+    ASTNode* node = alloc_node(AST_ARRAY, line, column);
+    node->as.array.elements = elements;
+    node->as.array.count = count;
+    return node;
+}
+
+ASTNode* ast_new_index_get(ASTNode* object, ASTNode* index, int line, int column) {
+    ASTNode* node = alloc_node(AST_INDEX_GET, line, column);
+    node->as.index_get.object = object;
+    node->as.index_get.index = index;
+    return node;
+}
+
+ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int line, int column) {
+    ASTNode* node = alloc_node(AST_INDEX_SET, line, column);
+    node->as.index_set.object = object;
+    node->as.index_set.index = index;
+    node->as.index_set.value = value;
+    return node;
+}
+
 ASTNode* ast_new_program(ASTNode** statements, int count) {
     ASTNode* node = alloc_node(AST_PROGRAM, 1, 1);
     node->as.program.statements = statements;
@@ -256,6 +278,24 @@ void ast_free(ASTNode* node) {
             
         case AST_GROUPING:
             ast_free(node->as.grouping.expression);
+            break;
+            
+        case AST_ARRAY:
+            for (int i = 0; i < node->as.array.count; i++) {
+                ast_free(node->as.array.elements[i]);
+            }
+            FREE_ARRAY(ASTNode*, node->as.array.elements, node->as.array.count);
+            break;
+            
+        case AST_INDEX_GET:
+            ast_free(node->as.index_get.object);
+            ast_free(node->as.index_get.index);
+            break;
+            
+        case AST_INDEX_SET:
+            ast_free(node->as.index_set.object);
+            ast_free(node->as.index_set.index);
+            ast_free(node->as.index_set.value);
             break;
             
         case AST_VAR_DECL:
@@ -411,6 +451,23 @@ void ast_print(ASTNode* node, int indent) {
         case AST_GROUPING:
             printf("GROUPING\n");
             ast_print(node->as.grouping.expression, indent + 1);
+            break;
+        case AST_ARRAY:
+            printf("ARRAY(%d elements)\n", node->as.array.count);
+            for (int i = 0; i < node->as.array.count; i++) {
+                ast_print(node->as.array.elements[i], indent + 1);
+            }
+            break;
+        case AST_INDEX_GET:
+            printf("INDEX_GET\n");
+            ast_print(node->as.index_get.object, indent + 1);
+            ast_print(node->as.index_get.index, indent + 1);
+            break;
+        case AST_INDEX_SET:
+            printf("INDEX_SET\n");
+            ast_print(node->as.index_set.object, indent + 1);
+            ast_print(node->as.index_set.index, indent + 1);
+            ast_print(node->as.index_set.value, indent + 1);
             break;
         case AST_VAR_DECL:
             printf("VAR(%s)\n", node->as.var_decl.name);

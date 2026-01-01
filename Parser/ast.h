@@ -26,6 +26,9 @@ typedef enum {
     AST_SET_COMPOUND,   /* obj.property += value */
     AST_SELF,
     AST_GROUPING,
+    AST_ARRAY,          /* [expr, expr, ...] */
+    AST_INDEX_GET,      /* arr[index] */
+    AST_INDEX_SET,      /* arr[index] = value */
     
     /* Statements */
     AST_VAR_DECL,
@@ -164,6 +167,25 @@ struct ASTNode {
             ASTNode* expression;
         } grouping;
         
+        /* AST_ARRAY */
+        struct {
+            ASTNode** elements;
+            int count;
+        } array;
+        
+        /* AST_INDEX_GET - arr[index] */
+        struct {
+            ASTNode* object;
+            ASTNode* index;
+        } index_get;
+        
+        /* AST_INDEX_SET - arr[index] = value */
+        struct {
+            ASTNode* object;
+            ASTNode* index;
+            ASTNode* value;
+        } index_set;
+        
         /* AST_VAR_DECL */
         struct {
             char* name;
@@ -269,6 +291,9 @@ ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);
 ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body, int line, int column);
 ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** methods, int method_count, int line, int column);
+ASTNode* ast_new_array(ASTNode** elements, int count, int line, int column);
+ASTNode* ast_new_index_get(ASTNode* object, ASTNode* index, int line, int column);
+ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int line, int column);
 ASTNode* ast_new_program(ASTNode** statements, int count);
 
 /* Free AST */

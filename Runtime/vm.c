@@ -13,6 +13,7 @@
 #include "boolobject.h"
 #include "nullobject.h"
 #include "classobject.h"
+#include "arrayobject.h"
 
 /* Forward declare vm_run_frame */
 static Value vm_run_frame(VM* vm);
@@ -81,6 +82,7 @@ void vm_init(VM* vm) {
     init_string_class();
     init_int_class();
     init_float_class();
+    init_array_class();
     
     vm->null_class = get_null_class();
     vm->bool_class = get_bool_class();
@@ -266,11 +268,27 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
             for (int i = 0; i < argc; i++) {
                 new_args[i + 1] = args[i];
             }
-            if (!call_function(vm, bound->method, argc + 1, new_args)) {
+            
+            if (IS_NATIVE(bound->method)) {
+                ObjNative* native = AS_NATIVE(bound->method);
+                if (native->arity >= 0 && (argc + 1) != native->arity) {
+                    vm_runtime_error(vm, "Expected %d arguments but got %d", 
+                                    native->arity, argc + 1);
+                    return false;
+                }
+                *result = native->function(vm, argc + 1, new_args);
+                return true;
+            } else if (IS_FUNCTION(bound->method)) {
+                ObjFunction* func = AS_FUNCTION(bound->method);
+                if (!call_function(vm, func, argc + 1, new_args)) {
+                    return false;
+                }
+                *result = vm_run_frame(vm);
+                return true;
+            } else {
+                vm_runtime_error(vm, "Invalid bound method type");
                 return false;
             }
-            *result = vm_run_frame(vm);
-            return true;
         }
         
         default:
@@ -613,8 +631,7 @@ static Value vm_run_frame(VM* vm) {
                     
                     ObjClass* klass = instance->obj.klass;
                     if (table_get(&klass->methods, name, &value)) {
-                        ObjFunction* method = (ObjFunction*)value.obj;
-                        ObjBoundMethod* bound = new_bound_method(obj_val, method);
+                        ObjBoundMethod* bound = new_bound_method(obj_val, value);
                         REG(dst) = OBJ_VAL(bound);
                         break;
                     }
@@ -630,6 +647,17 @@ static Value vm_run_frame(VM* vm) {
                         break;
                     }
                     vm_runtime_error(vm, "Undefined method '%s' on class", name->chars);
+                    return NULL_VAL;
+                } else if (IS_ARRAY(obj_val)) {
+                    /* Array method lookup */
+                    ObjClass* arr_class = get_array_class();
+                    Value method;
+                    if (arr_class && table_get(&arr_class->methods, name, &method)) {
+                        ObjBoundMethod* bound = new_bound_method(obj_val, method);
+                        REG(dst) = OBJ_VAL(bound);
+                        break;
+                    }
+                    vm_runtime_error(vm, "Undefined method '%s' on array", name->chars);
                     return NULL_VAL;
                 }
                 
@@ -671,34 +699,53 @@ static Value vm_run_frame(VM* vm) {
                 
                 Value obj_val = REG(obj_reg);
                 
-                if (!IS_INSTANCE(obj_val)) {
-                    vm_runtime_error(vm, "Only instances have methods");
+                if (IS_INSTANCE(obj_val)) {
+                    ObjInstance* instance = (ObjInstance*)obj_val.obj;
+                    ObjClass* klass = instance->obj.klass;
+                    
+                    Value method;
+                    if (!table_get(&klass->methods, name, &method)) {
+                        vm_runtime_error(vm, "Undefined method '%s'", name->chars);
+                        return NULL_VAL;
+                    }
+                    
+                    Value args[256];
+                    args[0] = obj_val;
+                    for (int i = 0; i < argc; i++) {
+                        args[i + 1] = REG(dst + 1 + i);
+                    }
+                    
+                    ObjFunction* func = (ObjFunction*)method.obj;
+                    if (!call_function(vm, func, argc + 1, args)) {
+                        return NULL_VAL;
+                    }
+                    
+                    Value result = vm_run_frame(vm);
+                    frame = &vm->frames[vm->frame_count - 1];
+                    REG(dst) = result;
+                } else if (IS_ARRAY(obj_val)) {
+                    /* Array method call */
+                    ObjClass* arr_class = get_array_class();
+                    Value method;
+                    if (!arr_class || !table_get(&arr_class->methods, name, &method)) {
+                        vm_runtime_error(vm, "Undefined method '%s' on array", name->chars);
+                        return NULL_VAL;
+                    }
+                    
+                    /* Array methods are native functions */
+                    ObjNative* native = (ObjNative*)method.obj;
+                    
+                    Value args[256];
+                    args[0] = obj_val;  /* self (the array) */
+                    for (int i = 0; i < argc; i++) {
+                        args[i + 1] = REG(dst + 1 + i);
+                    }
+                    
+                    REG(dst) = native->function(vm, argc + 1, args);
+                } else {
+                    vm_runtime_error(vm, "Only instances and arrays have methods");
                     return NULL_VAL;
                 }
-                
-                ObjInstance* instance = (ObjInstance*)obj_val.obj;
-                ObjClass* klass = instance->obj.klass;
-                
-                Value method;
-                if (!table_get(&klass->methods, name, &method)) {
-                    vm_runtime_error(vm, "Undefined method '%s'", name->chars);
-                    return NULL_VAL;
-                }
-                
-                Value args[256];
-                args[0] = obj_val;
-                for (int i = 0; i < argc; i++) {
-                    args[i + 1] = REG(dst + 1 + i);
-                }
-                
-                ObjFunction* func = (ObjFunction*)method.obj;
-                if (!call_function(vm, func, argc + 1, args)) {
-                    return NULL_VAL;
-                }
-                
-                Value result = vm_run_frame(vm);
-                frame = &vm->frames[vm->frame_count - 1];
-                REG(dst) = result;
                 break;
             }
             
@@ -720,6 +767,78 @@ static Value vm_run_frame(VM* vm) {
                 
                 /* Set superclass pointer */
                 subclass->superclass = superclass;
+                break;
+            }
+            
+            case OP_ARRAY: {
+                uint8_t dst = READ_BYTE();
+                uint8_t count = READ_BYTE();
+                uint8_t start_reg = READ_BYTE();
+                
+                ObjArray* arr = new_array_with_capacity(count);
+                for (int i = 0; i < count; i++) {
+                    array_push(arr, REG(start_reg + i));
+                }
+                
+                REG(dst) = OBJ_VAL(arr);
+                break;
+            }
+            
+            case OP_INDEX_GET: {
+                uint8_t dst = READ_BYTE();
+                uint8_t arr_reg = READ_BYTE();
+                uint8_t idx_reg = READ_BYTE();
+                
+                Value arr_val = REG(arr_reg);
+                Value idx_val = REG(idx_reg);
+                
+                if (!IS_ARRAY(arr_val)) {
+                    vm_runtime_error(vm, "Can only index arrays");
+                    return NULL_VAL;
+                }
+                if (!IS_INT(idx_val)) {
+                    vm_runtime_error(vm, "Array index must be an integer");
+                    return NULL_VAL;
+                }
+                
+                ObjArray* arr = AS_ARRAY(arr_val);
+                int idx = (int)((ObjInt*)idx_val.obj)->value;
+                
+                if (idx < 0 || idx >= arr->count) {
+                    vm_runtime_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                    return NULL_VAL;
+                }
+                
+                REG(dst) = arr->items[idx];
+                break;
+            }
+            
+            case OP_INDEX_SET: {
+                uint8_t arr_reg = READ_BYTE();
+                uint8_t idx_reg = READ_BYTE();
+                uint8_t val_reg = READ_BYTE();
+                
+                Value arr_val = REG(arr_reg);
+                Value idx_val = REG(idx_reg);
+                
+                if (!IS_ARRAY(arr_val)) {
+                    vm_runtime_error(vm, "Can only index arrays");
+                    return NULL_VAL;
+                }
+                if (!IS_INT(idx_val)) {
+                    vm_runtime_error(vm, "Array index must be an integer");
+                    return NULL_VAL;
+                }
+                
+                ObjArray* arr = AS_ARRAY(arr_val);
+                int idx = (int)((ObjInt*)idx_val.obj)->value;
+                
+                if (idx < 0 || idx >= arr->count) {
+                    vm_runtime_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                    return NULL_VAL;
+                }
+                
+                arr->items[idx] = REG(val_reg);
                 break;
             }
             

@@ -51,6 +51,9 @@ const char* opcode_name(OpCode op) {
         case OP_METHOD:         return "METHOD";
         case OP_INVOKE:         return "INVOKE";
         case OP_INHERIT:        return "INHERIT";
+        case OP_ARRAY:          return "ARRAY";
+        case OP_INDEX_GET:      return "INDEX_GET";
+        case OP_INDEX_SET:      return "INDEX_SET";
         default:                return "UNKNOWN";
     }
 }
@@ -103,6 +106,13 @@ int opcode_operand_count(OpCode op) {
             
         case OP_INVOKE:
             return 5;
+        
+        case OP_ARRAY:
+            return 3;  /* Rdst, count, start_reg */
+            
+        case OP_INDEX_GET:
+        case OP_INDEX_SET:
+            return 3;  /* 3 registers */
             
         default:
             return 1;
@@ -301,6 +311,17 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
         }
         case OP_INHERIT:
             return two_register_instruction("INHERIT", chunk, offset);
+        case OP_ARRAY: {
+            uint8_t rdst = chunk->code[offset + 1];
+            uint8_t count = chunk->code[offset + 2];
+            uint8_t start = chunk->code[offset + 3];
+            printf("%-16s R%d, count=%d, start=R%d\n", "ARRAY", rdst, count, start);
+            return offset + 4;
+        }
+        case OP_INDEX_GET:
+            return three_register_instruction("INDEX_GET", chunk, offset);
+        case OP_INDEX_SET:
+            return three_register_instruction("INDEX_SET", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;

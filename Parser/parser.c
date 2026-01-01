@@ -196,6 +196,37 @@ static ASTNode* grouping(bool can_assign) {
     return ast_new_grouping(expr, token.line, token.column);
 }
 
+static ASTNode* array_literal(bool can_assign) {
+    UNUSED(can_assign);
+    Token token = current_parser->previous;
+    
+    ASTNode** elements = NULL;
+    int count = 0;
+    int capacity = 0;
+    
+    skip_newlines();
+    
+    if (!check(TOKEN_RIGHT_BRACKET)) {
+        do {
+            skip_newlines();
+            ASTNode* element = expression();
+            
+            if (count >= capacity) {
+                capacity = GROW_CAPACITY(capacity);
+                elements = GROW_ARRAY(ASTNode*, elements, count, capacity);
+            }
+            elements[count++] = element;
+            
+            skip_newlines();
+        } while (match(TOKEN_COMMA));
+    }
+    
+    skip_newlines();
+    consume(TOKEN_RIGHT_BRACKET, "Expected ']' after array elements");
+    
+    return ast_new_array(elements, count, token.line, token.column);
+}
+
 static ASTNode* unary(bool can_assign) {
     UNUSED(can_assign);
     Token op_token = current_parser->previous;
@@ -347,12 +378,31 @@ static ASTNode* dot(ASTNode* left, bool can_assign) {
     return node;
 }
 
+static ASTNode* subscript(ASTNode* left, bool can_assign) {
+    Token bracket_token = current_parser->previous;
+    
+    skip_newlines();
+    ASTNode* index = expression();
+    skip_newlines();
+    consume(TOKEN_RIGHT_BRACKET, "Expected ']' after index");
+    
+    /* Check for assignment: arr[index] = value */
+    if (can_assign && match(TOKEN_EQUAL)) {
+        ASTNode* value = expression();
+        return ast_new_index_set(left, index, value, bracket_token.line, bracket_token.column);
+    }
+    
+    return ast_new_index_get(left, index, bracket_token.line, bracket_token.column);
+}
+
 /* Parse rules table */
 static ParseRule rules[] = {
     [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
     [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
     [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_LEFT_BRACKET]  = {array_literal, subscript, PREC_CALL},
+    [TOKEN_RIGHT_BRACKET] = {NULL,     NULL,   PREC_NONE},
     [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
     [TOKEN_PLUS]          = {unary,    binary, PREC_TERM},

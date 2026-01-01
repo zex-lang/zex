@@ -47,11 +47,11 @@ ObjNative* new_native(NativeFn function, int arity, const char* name);
 struct ObjBoundMethod {
     Obj obj;
     Value receiver;             /* The instance (self) */
-    ObjFunction* method;        /* The method function */
+    Value method;               /* The method function (closure or native) */
 };
 
 /* Create a bound method */
-ObjBoundMethod* new_bound_method(Value receiver, ObjFunction* method);
+ObjBoundMethod* new_bound_method(Value receiver, Value method);
 
 /* Get as bound method */
 #define AS_BOUND_METHOD(value) ((ObjBoundMethod*)AS_OBJ(value))

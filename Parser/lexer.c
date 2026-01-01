@@ -207,6 +207,8 @@ Token lexer_scan_token(Lexer* lexer) {
         case ')': return make_token(lexer, TOKEN_RIGHT_PAREN);
         case '{': return make_token(lexer, TOKEN_LEFT_BRACE);
         case '}': return make_token(lexer, TOKEN_RIGHT_BRACE);
+        case '[': return make_token(lexer, TOKEN_LEFT_BRACKET);
+        case ']': return make_token(lexer, TOKEN_RIGHT_BRACKET);
         case ',': return make_token(lexer, TOKEN_COMMA);
         case '.': return make_token(lexer, TOKEN_DOT);
         

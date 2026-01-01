@@ -24,7 +24,7 @@ ObjNative* new_native(NativeFn function, int arity, const char* name) {
     return native;
 }
 
-ObjBoundMethod* new_bound_method(Value receiver, ObjFunction* method) {
+ObjBoundMethod* new_bound_method(Value receiver, Value method) {
     ObjBoundMethod* bound = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD, NULL);
     bound->receiver = receiver;
     bound->method = method;

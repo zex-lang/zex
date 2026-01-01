@@ -12,6 +12,7 @@
 #include "nullobject.h"
 #include "funcobject.h"
 #include "classobject.h"
+#include "arrayobject.h"
 #include "memory.h"
 
 /* Global object list for GC */
@@ -42,6 +43,7 @@ const char* obj_type_name(ObjType type) {
         case OBJ_INSTANCE:      return "instance";
         case OBJ_NATIVE:        return "native";
         case OBJ_BOUND_METHOD:  return "bound_method";
+        case OBJ_ARRAY:         return "array";
         default:                return "unknown";
     }
 }
@@ -104,11 +106,29 @@ void print_value(Value value) {
             break;
         case OBJ_BOUND_METHOD: {
             ObjBoundMethod* bound = AS_BOUND_METHOD(value);
-            if (bound->method->name == NULL) {
+            ObjString* name = NULL;
+            
+            if (IS_NATIVE(bound->method)) {
+                name = AS_NATIVE(bound->method)->name;
+            } else if (IS_FUNCTION(bound->method)) {
+                name = AS_FUNCTION(bound->method)->name;
+            }
+            
+            if (name == NULL) {
                 printf("<bound method>");
             } else {
-                printf("<bound method %s>", bound->method->name->chars);
+                printf("<bound method %s>", name->chars);
             }
+            break;
+        }
+        case OBJ_ARRAY: {
+            ObjArray* arr = AS_ARRAY(value);
+            printf("[");
+            for (int i = 0; i < arr->count; i++) {
+                if (i > 0) printf(", ");
+                print_value(arr->items[i]);
+            }
+            printf("]");
             break;
         }
     }
@@ -160,6 +180,53 @@ ObjString* value_to_string(Value value) {
             return new_string(buffer, len);
         case OBJ_BOUND_METHOD:
             return new_string_cstr("<bound method>");
+        case OBJ_ARRAY: {
+            ObjArray* arr = AS_ARRAY(value);
+            if (arr->count == 0) return new_string_cstr("[]");
+            
+            size_t capacity = 64;
+            size_t length = 0;
+            char* buffer = zex_alloc(capacity);
+            
+            buffer[length++] = '[';
+            
+            for (int i = 0; i < arr->count; i++) {
+                if (i > 0) {
+                    if (length + 2 >= capacity) {
+                        size_t old_cap = capacity;
+                        capacity *= 2;
+                        buffer = zex_realloc(buffer, old_cap, capacity);
+                    }
+                    buffer[length++] = ',';
+                    buffer[length++] = ' ';
+                }
+                
+                ObjString* item_str = value_to_string(arr->items[i]);
+                size_t item_len = item_str->length;
+                
+                while (length + item_len + 2 >= capacity) {
+                    size_t old_cap = capacity;
+                    capacity = capacity * 2 + item_len;
+                    buffer = zex_realloc(buffer, old_cap, capacity);
+                }
+                
+                memcpy(buffer + length, item_str->chars, item_len);
+                length += item_len;
+            }
+            
+            if (length + 2 >= capacity) {
+                size_t old_cap = capacity;
+                capacity += 2;
+                buffer = zex_realloc(buffer, old_cap, capacity);
+            }
+            
+            buffer[length++] = ']';
+            buffer[length] = '\0';
+            
+            ObjString* result = new_string(buffer, length);
+            zex_free(buffer, capacity);
+            return result;
+        }
     }
     
     return new_string_cstr("<unknown>");
@@ -262,6 +329,14 @@ static void free_object(Obj* object) {
         case OBJ_BOUND_METHOD:
             zex_free(object, sizeof(ObjBoundMethod));
             break;
+        case OBJ_ARRAY: {
+            ObjArray* arr = (ObjArray*)object;
+            if (arr->items != NULL) {
+                FREE_ARRAY(Value, arr->items, arr->capacity);
+            }
+            zex_free(object, sizeof(ObjArray));
+            break;
+        }
     }
 }
 

@@ -77,6 +77,11 @@ typedef enum {
     OP_METHOD,          /* Rclass, idx16 -- add method to class */
     OP_INVOKE,          /* Rdst, Robj, idx16, argc -- invoke method */
     OP_INHERIT,         /* Rsubclass, Rsuperclass -- inherit methods */
+    
+    /* Arrays */
+    OP_ARRAY,           /* Rdst, count -- create array from count values on stack */
+    OP_INDEX_GET,       /* Rdst, Rarr, Ridx -- Rdst = Rarr[Ridx] */
+    OP_INDEX_SET,       /* Rarr, Ridx, Rval -- Rarr[Ridx] = Rval */
 } OpCode;
 
 /* Get opcode name for debugging */

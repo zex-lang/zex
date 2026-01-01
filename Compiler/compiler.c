@@ -430,6 +430,65 @@ static void compile_grouping(ASTNode* node, int dest_reg) {
     compile_expression(node->as.grouping.expression, dest_reg);
 }
 
+static void compile_array(ASTNode* node, int dest_reg) {
+    int count = node->as.array.count;
+    int start_reg = current->next_reg;
+    
+    /* Compile each element into consecutive registers */
+    for (int i = 0; i < count; i++) {
+        int elem_reg = alloc_reg();
+        compile_expression(node->as.array.elements[i], elem_reg);
+    }
+    
+    /* Emit OP_ARRAY: dest_reg, start_reg, count */
+    emit_byte(OP_ARRAY, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte(count, node->line);
+    emit_byte(start_reg, node->line);  /* First element register */
+    
+    /* Free the temporary registers */
+    free_reg(count);
+}
+
+static void compile_index_get(ASTNode* node, int dest_reg) {
+    int arr_reg = alloc_reg();
+    int idx_reg = alloc_reg();
+    
+    compile_expression(node->as.index_get.object, arr_reg);
+    compile_expression(node->as.index_get.index, idx_reg);
+    
+    emit_byte(OP_INDEX_GET, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte(arr_reg, node->line);
+    emit_byte(idx_reg, node->line);
+    
+    free_reg(2);
+}
+
+static void compile_index_set(ASTNode* node, int dest_reg) {
+    int arr_reg = alloc_reg();
+    int idx_reg = alloc_reg();
+    int val_reg = alloc_reg();
+    
+    compile_expression(node->as.index_set.object, arr_reg);
+    compile_expression(node->as.index_set.index, idx_reg);
+    compile_expression(node->as.index_set.value, val_reg);
+    
+    emit_byte(OP_INDEX_SET, node->line);
+    emit_byte(arr_reg, node->line);
+    emit_byte(idx_reg, node->line);
+    emit_byte(val_reg, node->line);
+    
+    /* Result is the assigned value */
+    if (dest_reg != val_reg) {
+        emit_byte(OP_MOVE, node->line);
+        emit_byte(dest_reg, node->line);
+        emit_byte(val_reg, node->line);
+    }
+    
+    free_reg(3);
+}
+
 static void compile_expression(ASTNode* node, int dest_reg) {
     switch (node->type) {
         case AST_INT_LITERAL:
@@ -473,6 +532,15 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             break;
         case AST_GROUPING:
             compile_grouping(node, dest_reg);
+            break;
+        case AST_ARRAY:
+            compile_array(node, dest_reg);
+            break;
+        case AST_INDEX_GET:
+            compile_index_get(node, dest_reg);
+            break;
+        case AST_INDEX_SET:
+            compile_index_set(node, dest_reg);
             break;
         default:
             error_compile(node->line, "Unknown expression type: %d", node->type);

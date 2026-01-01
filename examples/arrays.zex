@@ -1,0 +1,74 @@
+# Arrays in Zex
+
+# Array creation
+var numbers = [1, 2, 3, 4, 5]
+println("Numbers: " + string(numbers))
+
+var mixed = [1, "hello", true, 3.14]
+println("Mixed: " + string(mixed))
+
+# Indexing (zero-based)
+println("First element: " + string(numbers[0]))
+println("Last element: " + string(numbers[4]))
+
+# Modification
+numbers[0] = 100
+println("Modified numbers: " + string(numbers))
+
+# Native Methods
+
+# len() - Get length
+println("Length: " + string(numbers.len()))
+
+# push(value) - Append element
+numbers.push(6)
+println("After push(6): " + string(numbers))
+
+# pop() - Remove and return last element
+var last = numbers.pop()
+println("Popped: " + string(last))
+println("Remaining: " + string(numbers))
+
+# first() and last()
+println("First: " + string(numbers.first()))
+println("Last: " + string(numbers.last()))
+
+# contains(value)
+if numbers.contains(100) {
+    println("Array contains 100")
+}
+
+if !numbers.contains(999) {
+    println("Array does not contain 999")
+}
+
+# reverse() - Reverse in place
+numbers.reverse()
+println("Reversed: " + string(numbers))
+
+# join(separator)
+var words = ["Hello", "World", "from", "Zex"]
+var sentence = words.join(" ")
+println("Joined: " + sentence)
+
+# clear() - Remove all elements
+numbers.clear()
+println("Cleared: " + string(numbers))
+println("Is empty: " + string(numbers.empty()))
+
+# Array of Arrays
+var matrix = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9]
+]
+println("Matrix row 1: " + string(matrix[1]))
+println("Matrix[0] first item: " + string(matrix[0].first()))
+
+# Methods as first-class citizens
+var list = []
+var append = list.push
+append(1)
+append(2)
+append(3)
+println("List built with bound method: " + string(list))
