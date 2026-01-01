@@ -39,6 +39,8 @@ typedef enum {
     AST_IF,
     AST_WHILE,
     AST_DO_WHILE,
+    AST_FOR,            /* C-style for loop */
+    AST_FOR_IN,         /* for-in iterator loop */
     AST_BREAK,
     AST_CONTINUE,
     AST_RETURN,
@@ -235,6 +237,21 @@ struct ASTNode {
             ASTNode* condition;
         } do_while_stmt;
         
+        /* AST_FOR */
+        struct {
+            ASTNode* initializer;  /* var decl or expr, can be NULL */
+            ASTNode* condition;    /* can be NULL (infinite loop) */
+            ASTNode* update;       /* can be NULL */
+            ASTNode* body;
+        } for_stmt;
+        
+        /* AST_FOR_IN */
+        struct {
+            char* var_name;
+            ASTNode* iterable;
+            ASTNode* body;
+        } for_in_stmt;
+        
         /* AST_RETURN */
         struct {
             ASTNode* value;        /* Can be NULL */
@@ -286,6 +303,8 @@ ASTNode* ast_new_block(ASTNode** statements, int count, int line, int column);
 ASTNode* ast_new_if(ASTNode* condition, ASTNode* then_branch, ASTNode* else_branch, int line, int column);
 ASTNode* ast_new_while(ASTNode* condition, ASTNode* body, int line, int column);
 ASTNode* ast_new_do_while(ASTNode* body, ASTNode* condition, int line, int column);
+ASTNode* ast_new_for(ASTNode* initializer, ASTNode* condition, ASTNode* update, ASTNode* body, int line, int column);
+ASTNode* ast_new_for_in(const char* var_name, ASTNode* iterable, ASTNode* body, int line, int column);
 ASTNode* ast_new_break(int line, int column);
 ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);

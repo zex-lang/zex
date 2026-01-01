@@ -23,6 +23,7 @@ typedef enum {
     TOKEN_STAR,             /* * */
     TOKEN_SLASH,            /* / */
     TOKEN_HASH,             /* # (comment) */
+    TOKEN_SEMICOLON,        /* ; */
     
     /* One or two character tokens */
     TOKEN_BANG,             /* ! */
@@ -61,6 +62,8 @@ typedef enum {
     TOKEN_FALSE,
     TOKEN_NULL,
     TOKEN_SELF,
+    TOKEN_FOR,
+    TOKEN_IN,
     TOKEN_AND,              /* Reserved for future */
     TOKEN_OR,               /* Reserved for future */
     

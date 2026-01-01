@@ -163,6 +163,23 @@ ASTNode* ast_new_do_while(ASTNode* body, ASTNode* condition, int line, int colum
     return node;
 }
 
+ASTNode* ast_new_for(ASTNode* initializer, ASTNode* condition, ASTNode* update, ASTNode* body, int line, int column) {
+    ASTNode* node = alloc_node(AST_FOR, line, column);
+    node->as.for_stmt.initializer = initializer;
+    node->as.for_stmt.condition = condition;
+    node->as.for_stmt.update = update;
+    node->as.for_stmt.body = body;
+    return node;
+}
+
+ASTNode* ast_new_for_in(const char* var_name, ASTNode* iterable, ASTNode* body, int line, int column) {
+    ASTNode* node = alloc_node(AST_FOR_IN, line, column);
+    node->as.for_in_stmt.var_name = zex_strdup(var_name);
+    node->as.for_in_stmt.iterable = iterable;
+    node->as.for_in_stmt.body = body;
+    return node;
+}
+
 ASTNode* ast_new_break(int line, int column) {
     return alloc_node(AST_BREAK, line, column);
 }
@@ -340,6 +357,19 @@ void ast_free(ASTNode* node) {
             ast_free(node->as.do_while_stmt.condition);
             break;
             
+        case AST_FOR:
+            ast_free(node->as.for_stmt.initializer);
+            ast_free(node->as.for_stmt.condition);
+            ast_free(node->as.for_stmt.update);
+            ast_free(node->as.for_stmt.body);
+            break;
+            
+        case AST_FOR_IN:
+            zex_free(node->as.for_in_stmt.var_name, strlen(node->as.for_in_stmt.var_name) + 1);
+            ast_free(node->as.for_in_stmt.iterable);
+            ast_free(node->as.for_in_stmt.body);
+            break;
+            
         case AST_BREAK:
         case AST_CONTINUE:
             /* No children to free */
@@ -513,6 +543,30 @@ void ast_print(ASTNode* node, int indent) {
             printf("DO_WHILE\n");
             ast_print(node->as.do_while_stmt.body, indent + 1);
             ast_print(node->as.do_while_stmt.condition, indent + 1);
+            break;
+        case AST_FOR:
+            printf("FOR\n");
+            if (node->as.for_stmt.initializer) {
+                print_indent(indent);
+                printf("INIT:\n");
+                ast_print(node->as.for_stmt.initializer, indent + 1);
+            }
+            if (node->as.for_stmt.condition) {
+                print_indent(indent);
+                printf("COND:\n");
+                ast_print(node->as.for_stmt.condition, indent + 1);
+            }
+            if (node->as.for_stmt.update) {
+                print_indent(indent);
+                printf("UPDATE:\n");
+                ast_print(node->as.for_stmt.update, indent + 1);
+            }
+            ast_print(node->as.for_stmt.body, indent + 1);
+            break;
+        case AST_FOR_IN:
+            printf("FOR_IN(%s)\n", node->as.for_in_stmt.var_name);
+            ast_print(node->as.for_in_stmt.iterable, indent + 1);
+            ast_print(node->as.for_in_stmt.body, indent + 1);
             break;
         case AST_BREAK:
             printf("BREAK\n");

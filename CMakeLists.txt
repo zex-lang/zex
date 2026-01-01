@@ -87,11 +87,3 @@ add_executable(zex
 
 # Link math library
 target_link_libraries(zex m)
-
-# Strip in release mode
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_custom_command(TARGET zex POST_BUILD
-        COMMAND ${CMAKE_STRIP} $<TARGET_FILE:zex> || true
-        COMMENT "Stripping zex executable"
-    )
-endif()

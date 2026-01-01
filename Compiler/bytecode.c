@@ -54,7 +54,8 @@ const char* opcode_name(OpCode op) {
         case OP_ARRAY:          return "ARRAY";
         case OP_INDEX_GET:      return "INDEX_GET";
         case OP_INDEX_SET:      return "INDEX_SET";
-        default:                return "UNKNOWN";
+        case OP_ITER_NEXT:      return "ITER_NEXT";
+        default:                return "UNKNOWN";;
     }
 }
 
@@ -113,6 +114,9 @@ int opcode_operand_count(OpCode op) {
         case OP_INDEX_GET:
         case OP_INDEX_SET:
             return 3;  /* 3 registers */
+        
+        case OP_ITER_NEXT:
+            return 5;  /* Rval, Ridx, Rarr, offset16 */
             
         default:
             return 1;
@@ -322,6 +326,14 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
             return three_register_instruction("INDEX_GET", chunk, offset);
         case OP_INDEX_SET:
             return three_register_instruction("INDEX_SET", chunk, offset);
+        case OP_ITER_NEXT: {
+            uint8_t rval = chunk->code[offset + 1];
+            uint8_t ridx = chunk->code[offset + 2];
+            uint8_t rarr = chunk->code[offset + 3];
+            uint16_t jump = chunk->code[offset + 4] | (chunk->code[offset + 5] << 8);
+            printf("%-16s R%d, R%d, R%d, -> %04d\n", "ITER_NEXT", rval, ridx, rarr, offset + 6 + jump);
+            return offset + 6;
+        }
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;

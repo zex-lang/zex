@@ -823,6 +823,35 @@ static Value vm_run_frame(VM* vm) {
                 break;
             }
             
+            case OP_ITER_NEXT: {
+                /* Get next item from array iterator */
+                uint8_t val_reg = READ_BYTE();
+                uint8_t idx_reg = READ_BYTE();
+                uint8_t arr_reg = READ_BYTE();
+                uint16_t jump_offset = READ_BYTE();
+                jump_offset |= (READ_BYTE() << 8);
+                
+                Value arr_val = REG(arr_reg);
+                if (!IS_ARRAY(arr_val)) {
+                    vm_error(vm, "Can only iterate over arrays");
+                    return NULL_VAL;
+                }
+                
+                ObjArray* arr = AS_ARRAY(arr_val);
+                Value idx_val = REG(idx_reg);
+                int64_t idx = (IS_INT(idx_val)) ? ((ObjInt*)idx_val.obj)->value : 0;
+                
+                if (idx >= arr->count) {
+                    /* Done iterating, jump to end */
+                    frame->ip += jump_offset;
+                } else {
+                    /* Get current item and increment index */
+                    REG(val_reg) = arr->items[idx];
+                    REG(idx_reg) = INT_VAL(idx + 1);
+                }
+                break;
+            }
+            
             default:
                 vm_error(vm, "Unknown opcode %d", instruction);
                 return NULL_VAL;

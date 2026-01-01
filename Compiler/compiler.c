@@ -28,9 +28,13 @@ typedef struct CompilerState {
     
     /* For loop compilation */
     int loop_start;             /* Offset of loop start */
+    int continue_target;        /* Offset for continue (may differ from loop_start for for loops) */
     int* break_jumps;           /* Array of break jump locations to patch */
     int break_count;
     int break_capacity;
+    int* continue_jumps;        /* Array of continue jump locations for for loops */
+    int continue_count;
+    int continue_capacity;
     int loop_depth;             /* Nesting depth of loops */
 } CompilerState;
 
@@ -125,9 +129,13 @@ static void init_compiler(CompilerState* state, ObjFunction* function) {
     
     /* Initialize loop context */
     state->loop_start = -1;
+    state->continue_target = -1;
     state->break_jumps = NULL;
     state->break_count = 0;
     state->break_capacity = 0;
+    state->continue_jumps = NULL;
+    state->continue_count = 0;
+    state->continue_capacity = 0;
     state->loop_depth = 0;
     
     scope_init(&state->scope, current ? &current->scope : NULL);
@@ -569,6 +577,11 @@ static void compile_var_decl(ASTNode* node) {
         } else {
             emit_bytes(OP_LOAD_NULL, slot, node->line);
         }
+        
+        /* Ensure next_reg is past this local's register */
+        if (current->next_reg <= slot) {
+            current->next_reg = slot + 1;
+        }
     } else {
         /* Global variable */
         int idx = identifier_constant(name);
@@ -733,15 +746,23 @@ static void compile_if(ASTNode* node) {
 static void compile_while(ASTNode* node) {
     /* Save previous loop context */
     int prev_loop_start = current->loop_start;
+    int prev_continue_target = current->continue_target;
     int* prev_break_jumps = current->break_jumps;
     int prev_break_count = current->break_count;
     int prev_break_capacity = current->break_capacity;
+    int* prev_continue_jumps = current->continue_jumps;
+    int prev_continue_count = current->continue_count;
+    int prev_continue_capacity = current->continue_capacity;
     
     /* Initialize new loop context */
     current->loop_start = current_chunk()->count;
+    current->continue_target = current->loop_start;  /* For while, continue goes to start */
     current->break_jumps = NULL;
     current->break_count = 0;
     current->break_capacity = 0;
+    current->continue_jumps = NULL;
+    current->continue_count = 0;
+    current->continue_capacity = 0;
     current->loop_depth++;
     
     /* Condition */
@@ -775,24 +796,36 @@ static void compile_while(ASTNode* node) {
     
     /* Restore previous loop context */
     current->loop_start = prev_loop_start;
+    current->continue_target = prev_continue_target;
     current->break_jumps = prev_break_jumps;
     current->break_count = prev_break_count;
     current->break_capacity = prev_break_capacity;
+    current->continue_jumps = prev_continue_jumps;
+    current->continue_count = prev_continue_count;
+    current->continue_capacity = prev_continue_capacity;
     current->loop_depth--;
 }
 
 static void compile_do_while(ASTNode* node) {
     /* Save previous loop context */
     int prev_loop_start = current->loop_start;
+    int prev_continue_target = current->continue_target;
     int* prev_break_jumps = current->break_jumps;
     int prev_break_count = current->break_count;
     int prev_break_capacity = current->break_capacity;
+    int* prev_continue_jumps = current->continue_jumps;
+    int prev_continue_count = current->continue_count;
+    int prev_continue_capacity = current->continue_capacity;
     
     /* Initialize new loop context */
     current->loop_start = current_chunk()->count;
+    current->continue_target = current->loop_start;  /* For do-while, continue goes to start */
     current->break_jumps = NULL;
     current->break_count = 0;
     current->break_capacity = 0;
+    current->continue_jumps = NULL;
+    current->continue_count = 0;
+    current->continue_capacity = 0;
     current->loop_depth++;
     
     /* Body first */
@@ -826,9 +859,13 @@ static void compile_do_while(ASTNode* node) {
     
     /* Restore previous loop context */
     current->loop_start = prev_loop_start;
+    current->continue_target = prev_continue_target;
     current->break_jumps = prev_break_jumps;
     current->break_count = prev_break_count;
     current->break_capacity = prev_break_capacity;
+    current->continue_jumps = prev_continue_jumps;
+    current->continue_count = prev_continue_count;
+    current->continue_capacity = prev_continue_capacity;
     current->loop_depth--;
 }
 
@@ -860,10 +897,212 @@ static void compile_continue(ASTNode* node) {
         return;
     }
     
+    if (current->continue_target == -1) {
+        /* Deferred continue (for C-style for loops) - emit forward jump to patch later */
+        int jump_loc = current_chunk()->count;
+        emit_byte(OP_JUMP, node->line);
+        emit_byte16(0xFFFF, node->line);  /* Placeholder */
+        
+        /* Add to continue jump list */
+        if (current->continue_count >= current->continue_capacity) {
+            int old_cap = current->continue_capacity;
+            current->continue_capacity = old_cap < 8 ? 8 : old_cap * 2;
+            current->continue_jumps = GROW_ARRAY(int, current->continue_jumps, old_cap, current->continue_capacity);
+        }
+        current->continue_jumps[current->continue_count++] = jump_loc;
+    } else {
+        /* Immediate continue (for while/do-while loops) */
+        emit_byte(OP_JUMP_BACK, node->line);
+        int loop_offset = current_chunk()->count - current->continue_target + 2;
+        emit_byte16(loop_offset, node->line);
+    }
+}
+
+static void compile_for(ASTNode* node) {
+    /* C-style for loop: for var i = 0; i < 10; i += 1 { } */
+    
+    scope_begin(&current->scope);
+    
+    /* Initializer */
+    if (node->as.for_stmt.initializer) {
+        compile_node(node->as.for_stmt.initializer, 0);
+    }
+    
+    /* Save previous loop context */
+    int prev_loop_start = current->loop_start;
+    int prev_continue_target = current->continue_target;
+    int* prev_break_jumps = current->break_jumps;
+    int prev_break_count = current->break_count;
+    int prev_break_capacity = current->break_capacity;
+    int* prev_continue_jumps = current->continue_jumps;
+    int prev_continue_count = current->continue_count;
+    int prev_continue_capacity = current->continue_capacity;
+    
+    /* Initialize new loop context */
+    current->loop_start = current_chunk()->count;
+    current->continue_target = -1;  /* Use deferred patching for continues */
+    current->break_jumps = NULL;
+    current->break_count = 0;
+    current->break_capacity = 0;
+    current->continue_jumps = NULL;
+    current->continue_count = 0;
+    current->continue_capacity = 0;
+    current->loop_depth++;
+    
+    /* Condition */
+    int exit_jump = -1;
+    if (node->as.for_stmt.condition) {
+        int cond_reg = alloc_reg();
+        compile_expression(node->as.for_stmt.condition, cond_reg);
+        exit_jump = emit_jump(OP_JUMP_IF_FALSE, cond_reg, node->line);
+        free_reg(1);
+    }
+    
+    /* Body */
+    compile_node(node->as.for_stmt.body, 0);
+    
+    /* Patch all continue jumps to point to current position (start of update) */
+    int update_start = current_chunk()->count;
+    for (int i = 0; i < current->continue_count; i++) {
+        int jump = update_start - current->continue_jumps[i] - 3;
+        current_chunk()->code[current->continue_jumps[i] + 1] = jump & 0xFF;
+        current_chunk()->code[current->continue_jumps[i] + 2] = (jump >> 8) & 0xFF;
+    }
+    if (current->continue_jumps) {
+        zex_free(current->continue_jumps, current->continue_capacity * sizeof(int));
+    }
+    
+    /* Update (can be assignment or compound assignment, so use compile_node) */
+    if (node->as.for_stmt.update) {
+        compile_node(node->as.for_stmt.update, 0);
+    }
+    
+    /* Jump back to condition */
+    emit_byte(OP_JUMP_BACK, node->line);
+    int loop_offset = current_chunk()->count - current->loop_start + 2;
+    emit_byte16(loop_offset, node->line);
+    
+    /* Patch exit jump */
+    if (exit_jump >= 0) {
+        patch_jump(exit_jump);
+    }
+    
+    /* Patch all break jumps */
+    for (int i = 0; i < current->break_count; i++) {
+        int jump = current_chunk()->count - current->break_jumps[i] - 3;
+        current_chunk()->code[current->break_jumps[i] + 1] = jump & 0xFF;
+        current_chunk()->code[current->break_jumps[i] + 2] = (jump >> 8) & 0xFF;
+    }
+    if (current->break_jumps) {
+        zex_free(current->break_jumps, current->break_capacity * sizeof(int));
+    }
+    
+    /* Restore previous loop context */
+    current->loop_start = prev_loop_start;
+    current->continue_target = prev_continue_target;
+    current->break_jumps = prev_break_jumps;
+    current->break_count = prev_break_count;
+    current->break_capacity = prev_break_capacity;
+    current->continue_jumps = prev_continue_jumps;
+    current->continue_count = prev_continue_count;
+    current->continue_capacity = prev_continue_capacity;
+    current->loop_depth--;
+    
+    scope_end(&current->scope);
+}
+
+static void compile_for_in(ASTNode* node) {
+    /* For-in loop with iterator: for var x in arr { } */
+    
+    scope_begin(&current->scope);
+    
+    /* Evaluate iterable */
+    int arr_reg = alloc_reg();
+    compile_expression(node->as.for_in_stmt.iterable, arr_reg);
+    
+    /* Allocate register for index counter (starts at 0) */
+    int idx_reg = alloc_reg();
+    emit_byte(OP_LOAD_CONST, node->line);
+    emit_byte(idx_reg, node->line);
+    int zero_const = make_constant(INT_VAL(0));
+    emit_byte16(zero_const, node->line);
+    
+    /* Create loop variable as local */
+    int var_slot = scope_add_local(&current->scope, node->as.for_in_stmt.var_name,
+                                   strlen(node->as.for_in_stmt.var_name));
+    if (var_slot == -1) {
+        zex_error(ERROR_COMPILE, node->line, 0, 0, "Too many local variables");
+        current->had_error = true;
+        return;
+    }
+    int var_reg = alloc_reg();
+    current->scope.locals[var_slot].reg = var_reg;
+    
+    /* Save previous loop context */
+    int prev_loop_start = current->loop_start;
+    int prev_continue_target = current->continue_target;
+    int* prev_break_jumps = current->break_jumps;
+    int prev_break_count = current->break_count;
+    int prev_break_capacity = current->break_capacity;
+    int* prev_continue_jumps = current->continue_jumps;
+    int prev_continue_count = current->continue_count;
+    int prev_continue_capacity = current->continue_capacity;
+    
+    /* Initialize new loop context */
+    current->loop_start = current_chunk()->count;
+    current->continue_target = current->loop_start;  /* For for-in, continue goes to start */
+    current->break_jumps = NULL;
+    current->break_count = 0;
+    current->break_capacity = 0;
+    current->continue_jumps = NULL;
+    current->continue_count = 0;
+    current->continue_capacity = 0;
+    current->loop_depth++;
+    
+    /* OP_ITER_NEXT: get next value, increment index, jump if done */
+    emit_byte(OP_ITER_NEXT, node->line);
+    emit_byte(var_reg, node->line);
+    emit_byte(idx_reg, node->line);
+    emit_byte(arr_reg, node->line);
+    int exit_jump = current_chunk()->count;
+    emit_byte16(0xFFFF, node->line);  /* Placeholder for jump offset */
+    
+    /* Body */
+    compile_node(node->as.for_in_stmt.body, 0);
+    
     /* Jump back to loop start */
     emit_byte(OP_JUMP_BACK, node->line);
     int loop_offset = current_chunk()->count - current->loop_start + 2;
     emit_byte16(loop_offset, node->line);
+    
+    /* Patch exit jump */
+    int jump_dist = current_chunk()->count - exit_jump - 2;
+    current_chunk()->code[exit_jump] = jump_dist & 0xFF;
+    current_chunk()->code[exit_jump + 1] = (jump_dist >> 8) & 0xFF;
+    
+    /* Patch all break jumps */
+    for (int i = 0; i < current->break_count; i++) {
+        int jump = current_chunk()->count - current->break_jumps[i] - 3;
+        current_chunk()->code[current->break_jumps[i] + 1] = jump & 0xFF;
+        current_chunk()->code[current->break_jumps[i] + 2] = (jump >> 8) & 0xFF;
+    }
+    if (current->break_jumps) {
+        zex_free(current->break_jumps, current->break_capacity * sizeof(int));
+    }
+    
+    /* Restore previous loop context */
+    current->loop_start = prev_loop_start;
+    current->continue_target = prev_continue_target;
+    current->break_jumps = prev_break_jumps;
+    current->break_count = prev_break_count;
+    current->break_capacity = prev_break_capacity;
+    current->continue_jumps = prev_continue_jumps;
+    current->continue_count = prev_continue_count;
+    current->continue_capacity = prev_continue_capacity;
+    current->loop_depth--;
+    
+    scope_end(&current->scope);
+    free_reg(3);  /* var_reg, idx_reg, arr_reg */
 }
 
 static void compile_return(ASTNode* node) {
@@ -1028,6 +1267,12 @@ static void compile_node(ASTNode* node, int dest_reg) {
             break;
         case AST_DO_WHILE:
             compile_do_while(node);
+            break;
+        case AST_FOR:
+            compile_for(node);
+            break;
+        case AST_FOR_IN:
+            compile_for_in(node);
             break;
         case AST_BREAK:
             compile_break(node);

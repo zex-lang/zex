@@ -110,11 +110,19 @@ static TokenType identifier_type(Lexer* lexer) {
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
                     case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
+                    case 'o': return check_keyword(lexer, 2, 1, "r", TOKEN_FOR);
                     case 'u': return check_keyword(lexer, 2, 1, "n", TOKEN_FUN);
                 }
             }
             break;
-        case 'i': return check_keyword(lexer, 1, 1, "f", TOKEN_IF);
+        case 'i':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'f': return check_keyword(lexer, 2, 0, "", TOKEN_IF);
+                    case 'n': return check_keyword(lexer, 2, 0, "", TOKEN_IN);
+                }
+            }
+            break;
         case 'n': return check_keyword(lexer, 1, 3, "ull", TOKEN_NULL);
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
         case 's': return check_keyword(lexer, 1, 3, "elf", TOKEN_SELF);
@@ -246,6 +254,9 @@ Token lexer_scan_token(Lexer* lexer) {
             lexer->line++;
             lexer->column = 1;
             return make_token(lexer, TOKEN_NEWLINE);
+        
+        /* Semicolon */
+        case ';': return make_token(lexer, TOKEN_SEMICOLON);
         
     }
     

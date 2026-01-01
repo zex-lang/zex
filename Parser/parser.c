@@ -66,9 +66,9 @@ static void consume(TokenType type, const char* message) {
 }
 
 static void consume_line_end(void) {
-    /* Statement must end with newline or EOF */
-    if (check(TOKEN_NEWLINE) || check(TOKEN_EOF) || check(TOKEN_RIGHT_BRACE)) {
-        if (check(TOKEN_NEWLINE)) advance();
+    /* Statement must end with newline, semicolon, or EOF */
+    if (check(TOKEN_NEWLINE) || check(TOKEN_EOF) || check(TOKEN_RIGHT_BRACE) || check(TOKEN_SEMICOLON)) {
+        if (check(TOKEN_NEWLINE) || check(TOKEN_SEMICOLON)) advance();
         return;
     }
     
@@ -690,6 +690,86 @@ static ASTNode* do_while_statement(void) {
     return ast_new_do_while(body, condition, do_token.line, do_token.column);
 }
 
+static ASTNode* for_statement(void) {
+    Token for_token = current_parser->previous;
+    
+    /* Optional parenthesis */
+    bool has_paren = match(TOKEN_LEFT_PAREN);
+    
+    /* Must start with 'var' for the loop variable */
+    if (!match(TOKEN_VAR)) {
+        zex_error(ERROR_SYNTAX, current_parser->current.line,
+                  current_parser->current.column, current_parser->current.length,
+                  "Expected 'var' after 'for'");
+        current_parser->had_error = true;
+        return NULL;
+    }
+    
+    /* Get variable name */
+    consume(TOKEN_IDENTIFIER, "Expected variable name");
+    Token var_token = current_parser->previous;
+    char* var_name = zex_strndup(var_token.start, var_token.length);
+    
+    /* Check if this is for-in or C-style for */
+    if (match(TOKEN_IN)) {
+        /* For-in loop: for var x in arr { } */
+        ASTNode* iterable = expression();
+        
+        if (has_paren) {
+            consume(TOKEN_RIGHT_PAREN, "Expected ')' after for-in expression");
+        }
+        
+        skip_newlines();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' before for body");
+        ASTNode* body = block();
+        
+        ASTNode* result = ast_new_for_in(var_name, iterable, body, for_token.line, for_token.column);
+        zex_free(var_name, var_token.length + 1);
+        return result;
+    }
+    
+    /* C-style for: for var i = 0; i < 10; i += 1 { } */
+    
+    /* Initializer: var i = expr */
+    ASTNode* initializer = NULL;
+    if (match(TOKEN_EQUAL)) {
+        ASTNode* init_value = expression();
+        initializer = ast_new_var_decl(var_name, init_value, var_token.line, var_token.column);
+    } else {
+        initializer = ast_new_var_decl(var_name, NULL, var_token.line, var_token.column);
+    }
+    
+    consume(TOKEN_SEMICOLON, "Expected ';' after for initializer");
+    
+    /* Condition */
+    ASTNode* condition = NULL;
+    if (!check(TOKEN_SEMICOLON)) {
+        condition = expression();
+    }
+    
+    consume(TOKEN_SEMICOLON, "Expected ';' after for condition");
+    
+    /* Update */
+    ASTNode* update = NULL;
+    if (has_paren) {
+        if (!check(TOKEN_RIGHT_PAREN)) {
+            update = expression();
+        }
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after for clauses");
+    } else {
+        if (!check(TOKEN_LEFT_BRACE) && !check(TOKEN_NEWLINE)) {
+            update = expression();
+        }
+    }
+    
+    skip_newlines();
+    consume(TOKEN_LEFT_BRACE, "Expected '{' before for body");
+    ASTNode* body = block();
+    
+    zex_free(var_name, var_token.length + 1);
+    return ast_new_for(initializer, condition, update, body, for_token.line, for_token.column);
+}
+
 static ASTNode* expression_statement(void) {
     ASTNode* expr = expression();
     Token token = current_parser->previous;
@@ -720,6 +800,10 @@ static ASTNode* statement(void) {
     
     if (match(TOKEN_DO)) {
         return do_while_statement();
+    }
+    
+    if (match(TOKEN_FOR)) {
+        return for_statement();
     }
     
     if (match(TOKEN_BREAK)) {

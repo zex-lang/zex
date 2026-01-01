@@ -82,6 +82,9 @@ typedef enum {
     OP_ARRAY,           /* Rdst, count -- create array from count values on stack */
     OP_INDEX_GET,       /* Rdst, Rarr, Ridx -- Rdst = Rarr[Ridx] */
     OP_INDEX_SET,       /* Rarr, Ridx, Rval -- Rarr[Ridx] = Rval */
+    
+    /* Iterators (for-in loops) */
+    OP_ITER_NEXT,       /* Rval, Ridx, Rarr, offset16 -- get arr[idx], idx++, jump if done */
 } OpCode;
 
 /* Get opcode name for debugging */
