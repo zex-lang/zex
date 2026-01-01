@@ -403,19 +403,7 @@ static Value vm_run_frame(VM* vm) {
 #define READ_CONSTANT() (frame->function->chunk->constants[READ_SHORT()])
 #define REG(r) (frame->registers[r])
     
-    for (;;) {
-#ifdef DEBUG_TRACE_EXECUTION
-        printf("          ");
-        for (int i = 0; i < 8; i++) {
-            printf("R%d=", i);
-            print_value(REG(i));
-            printf(" ");
-        }
-        printf("\n");
-        chunk_disassemble_instruction(frame->function->chunk, 
-                                      (int)(frame->ip - frame->function->chunk->code));
-#endif
-        
+    for (;;) {        
         uint8_t instruction = READ_BYTE();
         
         switch (instruction) {
@@ -882,10 +870,6 @@ InterpretResult vm_interpret(VM* vm, const char* source) {
     if (compiled.had_error || compiled.function == NULL) {
         return INTERPRET_COMPILE_ERROR;
     }
-    
-#ifdef DEBUG_PRINT_CODE
-    chunk_disassemble(compiled.function->chunk, "<script>");
-#endif
     
     return vm_run(vm, compiled.function);
 }

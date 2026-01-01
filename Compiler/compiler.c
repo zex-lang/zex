@@ -142,13 +142,6 @@ static ObjFunction* end_compiler(void) {
     
     ObjFunction* function = current->function;
     
-#ifdef DEBUG_PRINT_CODE
-    if (!current->had_error) {
-        chunk_disassemble(current_chunk(), 
-                         function->name ? function->name->chars : "<script>");
-    }
-#endif
-    
     current = current->enclosing;
     return function;
 }
