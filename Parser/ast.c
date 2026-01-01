@@ -185,9 +185,10 @@ ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body,
     return node;
 }
 
-ASTNode* ast_new_class_decl(const char* name, ASTNode** methods, int method_count, int line, int column) {
+ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** methods, int method_count, int line, int column) {
     ASTNode* node = alloc_node(AST_CLASS_DECL, line, column);
     node->as.class_decl.name = zex_strdup(name);
+    node->as.class_decl.superclass = superclass ? zex_strdup(superclass) : NULL;
     node->as.class_decl.methods = methods;
     node->as.class_decl.method_count = method_count;
     return node;
@@ -320,6 +321,9 @@ void ast_free(ASTNode* node) {
             
         case AST_CLASS_DECL:
             zex_free(node->as.class_decl.name, strlen(node->as.class_decl.name) + 1);
+            if (node->as.class_decl.superclass) {
+                zex_free(node->as.class_decl.superclass, strlen(node->as.class_decl.superclass) + 1);
+            }
             for (int i = 0; i < node->as.class_decl.method_count; i++) {
                 ast_free(node->as.class_decl.methods[i]);
             }
@@ -471,7 +475,11 @@ void ast_print(ASTNode* node, int indent) {
             ast_print(node->as.fun_decl.body, indent + 1);
             break;
         case AST_CLASS_DECL:
-            printf("CLASS(%s)\n", node->as.class_decl.name);
+            if (node->as.class_decl.superclass) {
+                printf("CLASS(%s < %s)\n", node->as.class_decl.name, node->as.class_decl.superclass);
+            } else {
+                printf("CLASS(%s)\n", node->as.class_decl.name);
+            }
             for (int i = 0; i < node->as.class_decl.method_count; i++) {
                 ast_print(node->as.class_decl.methods[i], indent + 1);
             }

@@ -877,6 +877,7 @@ static void compile_fun_decl(ASTNode* node) {
 
 static void compile_class_decl(ASTNode* node) {
     const char* name = node->as.class_decl.name;
+    const char* superclass = node->as.class_decl.superclass;
     int name_idx = identifier_constant(name);
     
     /* Create class object */
@@ -884,6 +885,24 @@ static void compile_class_decl(ASTNode* node) {
     emit_byte(OP_CLASS, node->line);
     emit_byte(class_reg, node->line);
     emit_byte16(name_idx, node->line);
+    
+    /* Handle inheritance */
+    if (superclass != NULL) {
+        int super_idx = identifier_constant(superclass);
+        int super_reg = alloc_reg();
+        
+        /* Get superclass */
+        emit_byte(OP_GET_GLOBAL, node->line);
+        emit_byte(super_reg, node->line);
+        emit_byte16(super_idx, node->line);
+        
+        /* Inherit methods from superclass */
+        emit_byte(OP_INHERIT, node->line);
+        emit_byte(class_reg, node->line);
+        emit_byte(super_reg, node->line);
+        
+        free_reg(1);
+    }
     
     /* Define global first so methods can reference the class */
     emit_byte(OP_DEF_GLOBAL, node->line);

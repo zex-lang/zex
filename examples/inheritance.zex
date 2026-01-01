@@ -1,0 +1,47 @@
+# Inheritance in Zex
+# Using Ruby-style syntax: class Child < Parent
+
+class Animal {
+    fun init(self, name) {
+        self.name = name
+    }
+    
+    fun speak(self) {
+        println("Some sound")
+    }
+    
+    fun describe(self) {
+        println("I am " + self.name)
+    }
+}
+
+class Dog < Animal {
+    fun speak(self) {
+        println(self.name + " says: Woof!")
+    }
+    
+    fun fetch(self) {
+        println(self.name + " is fetching!")
+    }
+}
+
+class Cat < Animal {
+    fun speak(self) {
+        println(self.name + " says: Meow!")
+    }
+}
+
+# Dogs and Cats inherit from Animal
+var dog = Dog("Rex")
+var cat = Cat("Whiskers")
+
+# Inherited method from Animal
+dog.describe()
+cat.describe()
+
+# Overridden method
+dog.speak()
+cat.speak()
+
+# Dog-specific method
+dog.fetch()

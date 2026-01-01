@@ -228,6 +228,7 @@ struct ASTNode {
         /* AST_CLASS_DECL */
         struct {
             char* name;
+            char* superclass;      /* NULL if no inheritance */
             ASTNode** methods;     /* function declarations */
             int method_count;
         } class_decl;
@@ -267,7 +268,7 @@ ASTNode* ast_new_break(int line, int column);
 ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);
 ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body, int line, int column);
-ASTNode* ast_new_class_decl(const char* name, ASTNode** methods, int method_count, int line, int column);
+ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** methods, int method_count, int line, int column);
 ASTNode* ast_new_program(ASTNode** statements, int count);
 
 /* Free AST */

@@ -10,6 +10,7 @@
 ObjClass* new_class(ObjString* name) {
     ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS, NULL);
     klass->name = name;
+    klass->superclass = NULL;
     klass->init = NULL;
     table_init(&klass->methods);
     table_init(&klass->default_properties);

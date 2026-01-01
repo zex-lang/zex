@@ -702,6 +702,27 @@ static Value vm_run_frame(VM* vm) {
                 break;
             }
             
+            case OP_INHERIT: {
+                uint8_t subclass_reg = READ_BYTE();
+                uint8_t superclass_reg = READ_BYTE();
+                
+                Value superclass_val = REG(superclass_reg);
+                if (superclass_val.obj == NULL || superclass_val.obj->type != OBJ_CLASS) {
+                    vm_runtime_error(vm, "Superclass must be a class");
+                    return NULL_VAL;
+                }
+                
+                ObjClass* superclass = (ObjClass*)superclass_val.obj;
+                ObjClass* subclass = (ObjClass*)REG(subclass_reg).obj;
+                
+                /* Copy all methods from superclass to subclass */
+                table_add_all(&superclass->methods, &subclass->methods);
+                
+                /* Set superclass pointer */
+                subclass->superclass = superclass;
+                break;
+            }
+            
             default:
                 vm_runtime_error(vm, "Unknown opcode %d", instruction);
                 return NULL_VAL;

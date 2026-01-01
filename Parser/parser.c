@@ -532,7 +532,16 @@ static ASTNode* class_declaration(void) {
     Token name_token = current_parser->previous;
     char* name = zex_strndup(name_token.start, name_token.length);
     
+    /* Check for inheritance: class Child < Parent */
+    char* superclass = NULL;
     skip_newlines();
+    if (match(TOKEN_LESS)) {
+        consume(TOKEN_IDENTIFIER, "Expected superclass name after '<'");
+        Token super_token = current_parser->previous;
+        superclass = zex_strndup(super_token.start, super_token.length);
+        skip_newlines();
+    }
+    
     consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");
     skip_newlines();
     
@@ -570,9 +579,12 @@ static ASTNode* class_declaration(void) {
     
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
     
-    ASTNode* node = ast_new_class_decl(name, methods, method_count,
+    ASTNode* node = ast_new_class_decl(name, superclass, methods, method_count,
                                        class_token.line, class_token.column);
     zex_free(name, name_token.length + 1);
+    if (superclass) {
+        zex_free(superclass, strlen(superclass) + 1);
+    }
     return node;
 }
 

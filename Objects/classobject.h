@@ -13,6 +13,7 @@
 struct ObjClass {
     Obj obj;
     ObjString* name;            /* Class name */
+    struct ObjClass* superclass; /* Parent class (NULL if none) */
     Table methods;              /* Method table */
     Table default_properties;   /* Default property values */
     ObjFunction* init;          /* Constructor (init method) */

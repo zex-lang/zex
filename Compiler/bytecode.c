@@ -50,6 +50,7 @@ const char* opcode_name(OpCode op) {
         case OP_SET_PROPERTY:   return "SET_PROPERTY";
         case OP_METHOD:         return "METHOD";
         case OP_INVOKE:         return "INVOKE";
+        case OP_INHERIT:        return "INHERIT";
         default:                return "UNKNOWN";
     }
 }
@@ -67,6 +68,7 @@ int opcode_operand_count(OpCode op) {
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_RETURN:
+        case OP_INHERIT:
             return 2;
             
         case OP_LOAD_CONST:
@@ -297,6 +299,8 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
                    AS_STRING(chunk->constants[idx])->chars, argc);
             return offset + 6;
         }
+        case OP_INHERIT:
+            return two_register_instruction("INHERIT", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
