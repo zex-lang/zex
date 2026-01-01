@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "stringobject.h"
 #include "classobject.h"
+#include "funcobject.h"
 
 /* Magic number bytes */
 const uint8_t ZEX_MAGIC[12] = {
@@ -303,7 +304,20 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
 }
 
 void chunk_disassemble(Chunk* chunk) {
+    /* First disassemble the main chunk */
     for (int offset = 0; offset < chunk->count;) {
         offset = chunk_disassemble_instruction(chunk, offset);
+    }
+    
+    /* Then disassemble any functions in the constant pool */
+    for (int i = 0; i < chunk->const_count; i++) {
+        Value constant = chunk->constants[i];
+        if (constant.obj != NULL && constant.obj->type == OBJ_FUNCTION) {
+            ObjFunction* fn = (ObjFunction*)constant.obj;
+            if (fn->chunk != NULL && fn->chunk->count > 0) {
+                printf("\n-- %s --\n", fn->name ? fn->name->chars : "<anonymous>");
+                chunk_disassemble(fn->chunk);
+            }
+        }
     }
 }
