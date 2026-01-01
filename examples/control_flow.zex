@@ -28,7 +28,7 @@ if a && b {
 var x = 10
 var y = 20
 
-println("x == y: " + string(x == y))
-println("x != y: " + string(x != y))
-println("x < y: " + string(x < y))
-println("x > y: " + string(x > y))
+println("x == y: " + (x == y))
+println("x != y: " + (x != y))
+println("x < y: " + (x < y))
+println("x > y: " + (x > y))

@@ -51,7 +51,7 @@ var c = Counter(0, 2)
 c.increment()
 c.increment()
 c.increment()
-println("Counter: " + string(c.value()))
+println("Counter: " + c.value())
 
 # Person
 var alice = Person("Alice", 25)
@@ -60,5 +60,5 @@ alice.birthday()
 
 # Rectangle
 var rect = Rectangle(10, 5)
-println("Area: " + string(rect.area()))
-println("Perimeter: " + string(rect.perimeter()))
+println("Area: " + rect.area())
+println("Perimeter: " + rect.perimeter())

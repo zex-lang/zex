@@ -2,36 +2,36 @@
 
 # Array creation
 var numbers = [1, 2, 3, 4, 5]
-println("Numbers: " + string(numbers))
+println("Numbers: " + numbers)
 
 var mixed = [1, "hello", true, 3.14]
-println("Mixed: " + string(mixed))
+println("Mixed: " + mixed)
 
 # Indexing (zero-based)
-println("First element: " + string(numbers[0]))
-println("Last element: " + string(numbers[4]))
+println("First element: " + numbers[0])
+println("Last element: " + numbers[4])
 
 # Modification
 numbers[0] = 100
-println("Modified numbers: " + string(numbers))
+println("Modified numbers: " + numbers)
 
 # Native Methods
 
 # len() - Get length
-println("Length: " + string(numbers.len()))
+println("Length: " + numbers.len())
 
 # push(value) - Append element
 numbers.push(6)
-println("After push(6): " + string(numbers))
+println("After push(6): " + numbers)
 
 # pop() - Remove and return last element
 var last = numbers.pop()
-println("Popped: " + string(last))
-println("Remaining: " + string(numbers))
+println("Popped: " + last)
+println("Remaining: " + numbers)
 
 # first() and last()
-println("First: " + string(numbers.first()))
-println("Last: " + string(numbers.last()))
+println("First: " + numbers.first())
+println("Last: " + numbers.last())
 
 # contains(value)
 if numbers.contains(100) {
@@ -44,7 +44,7 @@ if !numbers.contains(999) {
 
 # reverse() - Reverse in place
 numbers.reverse()
-println("Reversed: " + string(numbers))
+println("Reversed: " + numbers)
 
 # join(separator)
 var words = ["Hello", "World", "from", "Zex"]
@@ -53,8 +53,8 @@ println("Joined: " + sentence)
 
 # clear() - Remove all elements
 numbers.clear()
-println("Cleared: " + string(numbers))
-println("Is empty: " + string(numbers.empty()))
+println("Cleared: " + numbers)
+println("Is empty: " + numbers.empty())
 
 # Array of Arrays
 var matrix = [
@@ -62,8 +62,8 @@ var matrix = [
     [4, 5, 6],
     [7, 8, 9]
 ]
-println("Matrix row 1: " + string(matrix[1]))
-println("Matrix[0] first item: " + string(matrix[0].first()))
+println("Matrix row 1: " + matrix[1])
+println("Matrix[0] first item: " + matrix[0].first())
 
 # Methods as first-class citizens
 var list = []
@@ -71,4 +71,4 @@ var append = list.push
 append(1)
 append(2)
 append(3)
-println("List built with bound method: " + string(list))
+println("List built with bound method: " + list)
