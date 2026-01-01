@@ -28,6 +28,10 @@ bool error_had_error(void) {
     return g_had_error;
 }
 
+const char* error_get_filename(void) {
+    return g_filename;
+}
+
 void error_reset(void) {
     g_had_error = false;
 }

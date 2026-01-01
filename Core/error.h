@@ -39,6 +39,9 @@ void error_at_token(const char* token_start, int token_length, int line, int col
 /* Check if any errors occurred */
 bool error_had_error(void);
 
+/* Get current filename */
+const char* error_get_filename(void);
+
 /* Reset error state */
 void error_reset(void);
 

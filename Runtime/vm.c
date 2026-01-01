@@ -39,6 +39,8 @@ void vm_runtime_error(VM* vm, const char* format, ...) {
     
     /* Print stack trace */
     fprintf(stderr, "\nStack trace:\n");
+    const char* filename = error_get_filename();
+    
     for (int i = vm->frame_count - 1; i >= 0; i--) {
         CallFrame* frame = &vm->frames[i];
         ObjFunction* function = frame->function;
@@ -47,10 +49,15 @@ void vm_runtime_error(VM* vm, const char* format, ...) {
         
         fprintf(stderr, "  [line %d] in ", line);
         if (function->name == NULL) {
-            fprintf(stderr, "script\n");
+            fprintf(stderr, "<script>");
         } else {
-            fprintf(stderr, "%s()\n", function->name->chars);
+            fprintf(stderr, "%s()", function->name->chars);
         }
+        
+        if (filename != NULL) {
+            fprintf(stderr, " (%s)", filename);
+        }
+        fprintf(stderr, "\n");
     }
     fprintf(stderr, "\n");
 }
