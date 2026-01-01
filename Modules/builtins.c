@@ -6,13 +6,10 @@
  */
 
 #include "builtins.h"
+#include "error.h"
 #include "object.h"
 #include "stringobject.h"
-#include "intobject.h"
-#include "floatobject.h"
-#include "boolobject.h"
 #include "nullobject.h"
-#include "classobject.h"
 
 /*
  * println(args...)
@@ -36,7 +33,7 @@ static Value builtin_println(VM* vm, int argc, Value* args) {
  */
 static Value builtin_type(VM* vm, int argc, Value* args) {
     if (argc != 1) {
-        vm_runtime_error(vm, "type() takes exactly 1 argument (%d given)", argc);
+        zex_error(ERROR_RUNTIME, 0, 0, 0, "type() takes exactly 1 argument (%d given)", argc);
         return NULL_VAL;
     }
     

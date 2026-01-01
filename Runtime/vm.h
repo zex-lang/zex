@@ -67,7 +67,7 @@ void vm_define_native(VM* vm, const char* name, NativeFn function, int arity);
 /* Get the global VM instance */
 VM* vm_get(void);
 
-/* Runtime error reporting */
-void vm_runtime_error(VM* vm, const char* format, ...);
+/* Report runtime error with stack trace */
+void vm_error(VM* vm, const char* format, ...);
 
 #endif /* ZEX_VM_H */

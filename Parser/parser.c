@@ -29,11 +29,9 @@ static void advance(void) {
         if (current_parser->current.type != TOKEN_ERROR) break;
         
         /* Report lexer error */
-        error_at_token(current_parser->current.start, 
-                      1,  /* Error tokens point to a single bad character */
-                      current_parser->current.line,
-                      current_parser->current.column,
-                      current_parser->current.start, NULL);
+        zex_error(ERROR_SYNTAX, current_parser->current.line,
+                  current_parser->current.column, 1, "%s",
+                  current_parser->current.start);
         current_parser->had_error = true;
     }
 }
@@ -60,11 +58,9 @@ static void consume(TokenType type, const char* message) {
         return;
     }
     
-    error_at_token(current_parser->current.start,
-                  current_parser->current.length,
-                  current_parser->current.line,
-                  current_parser->current.column,
-                  message, NULL);
+    zex_error(ERROR_SYNTAX, current_parser->current.line,
+              current_parser->current.column, current_parser->current.length,
+              "%s", message);
     current_parser->had_error = true;
     current_parser->panic_mode = true;
 }
@@ -76,12 +72,9 @@ static void consume_line_end(void) {
         return;
     }
     
-    error_at_token(current_parser->current.start,
-                  current_parser->current.length,
-                  current_parser->current.line,
-                  current_parser->current.column,
-                  "Expected end of line after statement",
-                  NULL);
+    zex_error(ERROR_SYNTAX, current_parser->current.line,
+              current_parser->current.column, current_parser->current.length,
+              "Expected end of line after statement");
     current_parser->had_error = true;
 }
 
@@ -146,8 +139,8 @@ static ASTNode* number(bool can_assign) {
         errno = 0;
         int64_t value = strtoll(token.start, NULL, 10);
         if (errno == ERANGE) {
-            error_at_token(token.start, token.length, token.line, token.column,
-                          "Integer literal is too large", NULL);
+            zex_error(ERROR_SYNTAX, token.line, token.column, token.length,
+                      "Integer literal is too large");
         }
         return ast_new_int_literal(value, token.line, token.column);
     } else {
@@ -454,12 +447,9 @@ static ASTNode* parse_precedence(Precedence precedence) {
     
     PrefixFn prefix_rule = get_rule(current_parser->previous.type)->prefix;
     if (prefix_rule == NULL) {
-        error_at_token(current_parser->previous.start,
-                      current_parser->previous.length,
-                      current_parser->previous.line,
-                      current_parser->previous.column,
-                      "Expected an expression",
-                      "Check that your expression starts with a valid value or operator.");
+        zex_error(ERROR_SYNTAX, current_parser->previous.line,
+                  current_parser->previous.column, current_parser->previous.length,
+                  "Expected an expression");
         current_parser->had_error = true;
         return NULL;
     }
@@ -544,11 +534,9 @@ static ASTNode* fun_declaration(void) {
         do {
             /* Allow 'self' keyword as parameter name (for methods) */
             if (!check(TOKEN_IDENTIFIER) && !check(TOKEN_SELF)) {
-                error_at_token(current_parser->current.start,
-                              current_parser->current.length,
-                              current_parser->current.line,
-                              current_parser->current.column,
-                              "Expected parameter name", NULL);
+                zex_error(ERROR_SYNTAX, current_parser->current.line,
+                          current_parser->current.column, current_parser->current.length,
+                          "Expected parameter name");
                 current_parser->had_error = true;
                 current_parser->panic_mode = true;
                 break;
@@ -616,12 +604,9 @@ static ASTNode* class_declaration(void) {
         } else if (check(TOKEN_NEWLINE)) {
             advance();
         } else if (!check(TOKEN_RIGHT_BRACE)) {
-            error_at_token(current_parser->current.start,
-                          current_parser->current.length,
-                          current_parser->current.line,
-                          current_parser->current.column,
-                          "Expected 'fun' in class body",
-                          "Class body can only contain methods.");
+            zex_error(ERROR_SYNTAX, current_parser->current.line,
+                      current_parser->current.column, current_parser->current.length,
+                      "Expected 'fun' in class body");
             current_parser->had_error = true;
             synchronize();
         }

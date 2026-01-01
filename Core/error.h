@@ -1,6 +1,6 @@
 /*
  * Zex Programming Language
- * Core/error.h - Elm-style error handling interface
+ * Core/error.h - Unified error handling interface
  */
 
 #ifndef ZEX_ERROR_H
@@ -8,33 +8,18 @@
 
 #include "common.h"
 
-/* Source location for error reporting */
-typedef struct {
-    const char* filename;
-    const char* source;        /* Full source code */
-    int line;
-    int column;
-    int length;                /* Length of error span */
-} SourceLoc;
-
 /* Error types */
 typedef enum {
     ERROR_SYNTAX,
-    ERROR_TYPE,
+    ERROR_COMPILE,
     ERROR_RUNTIME,
-    ERROR_NAME,
 } ErrorType;
+
+/* Maximum stack trace depth */
+#define ZEX_MAX_ERROR_FRAMES 64
 
 /* Initialize error system with source */
 void error_init(const char* filename, const char* source);
-
-/* Report an error with Elm-style formatting */
-void error_report(ErrorType type, SourceLoc loc, const char* message, const char* hint);
-
-/* Convenience functions */
-void error_at(int line, int column, const char* message, const char* hint);
-void error_at_token(const char* token_start, int token_length, int line, int column,
-                    const char* message, const char* hint);
 
 /* Check if any errors occurred */
 bool error_had_error(void);
@@ -42,17 +27,28 @@ bool error_had_error(void);
 /* Get current filename */
 const char* error_get_filename(void);
 
+/* Get current source */
+const char* error_get_source(void);
+
 /* Reset error state */
 void error_reset(void);
 
-/* Print formatted error message */
-void error_reportf(ErrorType type, SourceLoc loc, const char* hint, 
-                   const char* format, ...) __attribute__((format(printf, 4, 5)));
+/* Push a frame onto the error stack trace */
+void error_push_frame(const char* name, int line, int column);
 
-/* Compile-time error with optional line number */
-void error_compile(int line, const char* format, ...) __attribute__((format(printf, 2, 3)));
+/* Clear the error stack trace */
+void error_clear_frames(void);
 
-/* Runtime error with formatted message */
-void error_runtime(const char* format, ...) __attribute__((format(printf, 1, 2)));
+/*
+ * Format:
+ *   at Line N, <Error Type>: <message>
+ *     <source line>
+ *     ^^^^^^^^^^^^
+ *   
+ *   Stack trace:
+ *     in func() (/path/to/file.zex:N:M)
+ */
+void zex_error(ErrorType type, int line, int column, int span, 
+               const char* format, ...) __attribute__((format(printf, 5, 6)));
 
 #endif /* ZEX_ERROR_H */

@@ -1,6 +1,6 @@
 /*
  * Zex Programming Language
- * Core/error.c - Elm-style error handling implementation
+ * Core/error.c - Unified error handling implementation
  */
 
 #include "error.h"
@@ -8,20 +8,30 @@
 /* ANSI color codes */
 #define COLOR_RESET   "\033[0m"
 #define COLOR_RED     "\033[31m"
-#define COLOR_YELLOW  "\033[33m"
 #define COLOR_CYAN    "\033[36m"
 #define COLOR_BOLD    "\033[1m"
-#define COLOR_DIM     "\033[2m"
 
 /* Global error state */
 static const char* g_filename = NULL;
 static const char* g_source = NULL;
 static bool g_had_error = false;
 
+/* Stack trace frame */
+typedef struct {
+    const char* name;
+    int line;
+    int column;
+} ErrorFrame;
+
+/* Stack trace storage */
+static ErrorFrame g_frames[ZEX_MAX_ERROR_FRAMES];
+static int g_frame_count = 0;
+
 void error_init(const char* filename, const char* source) {
     g_filename = filename;
     g_source = source;
     g_had_error = false;
+    g_frame_count = 0;
 }
 
 bool error_had_error(void) {
@@ -32,12 +42,47 @@ const char* error_get_filename(void) {
     return g_filename;
 }
 
+const char* error_get_source(void) {
+    return g_source;
+}
+
 void error_reset(void) {
     g_had_error = false;
+    g_frame_count = 0;
+}
+
+void error_push_frame(const char* name, int line, int column) {
+    if (g_frame_count < ZEX_MAX_ERROR_FRAMES) {
+        g_frames[g_frame_count].name = name;
+        g_frames[g_frame_count].line = line;
+        g_frames[g_frame_count].column = column;
+        g_frame_count++;
+    }
+}
+
+void error_clear_frames(void) {
+    g_frame_count = 0;
+}
+
+/* Get error type name */
+static const char* error_type_name(ErrorType type) {
+    switch (type) {
+        case ERROR_SYNTAX:  return "Syntax error";
+        case ERROR_COMPILE: return "Compile error";
+        case ERROR_RUNTIME: return "Runtime error";
+        default:            return "Error";
+    }
 }
 
 /* Get a line from source code */
-static void get_line(const char* source, int line_num, const char** start, int* length) {
+static void get_source_line(const char* source, int line_num, 
+                            const char** out_start, int* out_length) {
+    if (source == NULL) {
+        *out_start = "";
+        *out_length = 0;
+        return;
+    }
+    
     const char* p = source;
     int current_line = 1;
     
@@ -46,157 +91,79 @@ static void get_line(const char* source, int line_num, const char** start, int* 
         if (*p == '\n') current_line++;
         p++;
     }
-    *start = p;
+    *out_start = p;
     
     /* Find end of line */
     const char* end = p;
     while (*end && *end != '\n') end++;
-    *length = (int)(end - p);
+    *out_length = (int)(end - p);
 }
 
-/* Get error type name */
-static const char* error_type_name(ErrorType type) {
-    switch (type) {
-        case ERROR_SYNTAX:  return "Syntax Error";
-        case ERROR_TYPE:    return "Type Error";
-        case ERROR_RUNTIME: return "Runtime Error";
-        case ERROR_NAME:    return "Name Error";
-        default:            return "Error";
-    }
-}
-
-void error_report(ErrorType type, SourceLoc loc, const char* message, const char* hint) {
+void zex_error(ErrorType type, int line, int column, int span, 
+               const char* format, ...) {
     g_had_error = true;
     
+    /* Get source line */
     const char* line_start;
     int line_length;
-    get_line(g_source ? g_source : "", loc.line, &line_start, &line_length);
-    
-    /* Calculate line number width */
-    int line_width = 1;
-    int temp = loc.line;
-    while (temp >= 10) { temp /= 10; line_width++; }
+    get_source_line(g_source, line, &line_start, &line_length);
     
     fprintf(stderr, "\n");
     
-    /* Header */
-    fprintf(stderr, "%s%s── %s ", COLOR_BOLD, COLOR_RED, error_type_name(type));
-    for (int i = 0; i < 50 - (int)strlen(error_type_name(type)); i++) {
-        fprintf(stderr, "─");
-    }
-    fprintf(stderr, "%s\n", COLOR_RESET);
-    fprintf(stderr, "\n");
-    
-    /* File location */
-    if (g_filename) {
-        fprintf(stderr, "%s%s --> %s:%d:%d%s\n", 
-                COLOR_CYAN, COLOR_BOLD, g_filename, loc.line, loc.column, COLOR_RESET);
-        fprintf(stderr, "%s%*s │%s\n", COLOR_CYAN, line_width, "", COLOR_RESET);
-    }
-    
-    /* Source line */
-    fprintf(stderr, "%s%*d │%s ", COLOR_CYAN, line_width, loc.line, COLOR_RESET);
-    fprintf(stderr, "%.*s\n", line_length, line_start);
-    
-    /* Error pointer */
-    fprintf(stderr, "%s%*s │%s ", COLOR_CYAN, line_width, "", COLOR_RESET);
-    for (int i = 0; i < loc.column - 1; i++) {
-        fprintf(stderr, " ");
-    }
-    fprintf(stderr, "%s%s", COLOR_RED, COLOR_BOLD);
-    int underline_len = loc.length > 0 ? loc.length : 1;
-    for (int i = 0; i < underline_len; i++) {
-        fprintf(stderr, "^");
-    }
-    fprintf(stderr, "%s\n", COLOR_RESET);
-    
-    fprintf(stderr, "\n");
-    
-    /* Error message */
-    fprintf(stderr, "%s%s\n", message, COLOR_RESET);
-    
-    /* Hint */
-    if (hint) {
-        fprintf(stderr, "\n");
-        fprintf(stderr, "%s%sHint:%s %s\n", COLOR_YELLOW, COLOR_BOLD, COLOR_RESET, hint);
-    }
-    
-    fprintf(stderr, "\n");
-}
-
-void error_at(int line, int column, const char* message, const char* hint) {
-    SourceLoc loc = {
-        .filename = g_filename,
-        .source = g_source,
-        .line = line,
-        .column = column,
-        .length = 1,
-    };
-    error_report(ERROR_SYNTAX, loc, message, hint);
-}
-
-void error_at_token(const char* token_start, int token_length, int line, int column,
-                    const char* message, const char* hint) {
-    UNUSED(token_start);
-    SourceLoc loc = {
-        .filename = g_filename,
-        .source = g_source,
-        .line = line,
-        .column = column,
-        .length = token_length,
-    };
-    error_report(ERROR_SYNTAX, loc, message, hint);
-}
-
-void error_reportf(ErrorType type, SourceLoc loc, const char* hint, 
-                   const char* format, ...) {
-    char buffer[1024];
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
-    
-    error_report(type, loc, buffer, hint);
-}
-
-void error_compile(int line, const char* format, ...) {
-    g_had_error = true;
-    
-    fprintf(stderr, "\n");
-    fprintf(stderr, "%s%s── Compile Error ", COLOR_BOLD, COLOR_RED);
-    for (int i = 0; i < 47; i++) {
-        fprintf(stderr, "─");
-    }
-    fprintf(stderr, "%s\n", COLOR_RESET);
-    fprintf(stderr, "\n");
-    
-    if (line > 0) {
-        fprintf(stderr, "%s[line %d]%s ", COLOR_CYAN, line, COLOR_RESET);
-    }
+    /* Header: at Line N, Error Type: message */
+    fprintf(stderr, "%s%sat Line %d, %s:%s ", 
+            COLOR_BOLD, COLOR_RED, line, error_type_name(type), COLOR_RESET);
     
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
     
-    fprintf(stderr, "\n\n");
-}
-
-void error_runtime(const char* format, ...) {
-    g_had_error = true;
-    
     fprintf(stderr, "\n");
-    fprintf(stderr, "%s%s── Runtime Error ", COLOR_BOLD, COLOR_RED);
-    for (int i = 0; i < 47; i++) {
-        fprintf(stderr, "─");
+    
+    /* Source line and pointer */
+    if (line_length > 0 && column > 0) {
+        /* Find leading whitespace count */
+        int leading_spaces = 0;
+        while (leading_spaces < line_length && 
+               (line_start[leading_spaces] == ' ' || line_start[leading_spaces] == '\t')) {
+            leading_spaces++;
+        }
+        
+        fprintf(stderr, "  %.*s\n", line_length - leading_spaces, line_start + leading_spaces);
+        
+        /* Pointer under error */
+        fprintf(stderr, "  ");
+        int adjusted_col = column - 1 - leading_spaces;
+        if (adjusted_col < 0) adjusted_col = 0;
+        
+        for (int i = 0; i < adjusted_col; i++) {
+            fprintf(stderr, " ");
+        }
+        fprintf(stderr, "%s%s", COLOR_RED, COLOR_BOLD);
+        int underline_len = span > 0 ? span : 1;
+        for (int i = 0; i < underline_len; i++) {
+            fprintf(stderr, "^");
+        }
+        fprintf(stderr, "%s\n", COLOR_RESET);
     }
-    fprintf(stderr, "%s\n", COLOR_RESET);
-    fprintf(stderr, "\n");
     
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
+    /* Stack trace (only if we have frames) */
+    if (g_frame_count > 0) {
+        fprintf(stderr, "\nStack trace:\n");
+        for (int i = g_frame_count - 1; i >= 0; i--) {
+            ErrorFrame* frame = &g_frames[i];
+            fprintf(stderr, "  in %s%s%s (%s%s:%d:%d%s)\n",
+                    COLOR_CYAN, 
+                    frame->name ? frame->name : "<script>",
+                    COLOR_RESET,
+                    COLOR_BOLD,
+                    g_filename ? g_filename : "<unknown>",
+                    frame->line,
+                    frame->column,
+                    COLOR_RESET);
+        }
+    }
     
     fprintf(stderr, "\n");
 }

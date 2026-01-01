@@ -25,42 +25,35 @@ VM* vm_get(void) {
     return &global_vm;
 }
 
-void vm_runtime_error(VM* vm, const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\033[31m\033[1m── Runtime Error ─────────────────────────────────\033[0m\n");
-    fprintf(stderr, "\n");
-    
-    vfprintf(stderr, format, args);
-    fprintf(stderr, "\n");
-    
-    va_end(args);
-    
-    /* Print stack trace */
-    fprintf(stderr, "\nStack trace:\n");
-    const char* filename = error_get_filename();
-    
+void vm_error(VM* vm, const char* format, ...) {
+    /* Push stack trace frames to error system */
+    error_clear_frames();
     for (int i = vm->frame_count - 1; i >= 0; i--) {
         CallFrame* frame = &vm->frames[i];
         ObjFunction* function = frame->function;
         size_t instruction = frame->ip - function->chunk->code - 1;
         int line = function->chunk->lines[instruction];
         
-        fprintf(stderr, "  [line %d] in ", line);
-        if (function->name == NULL) {
-            fprintf(stderr, "<script>");
-        } else {
-            fprintf(stderr, "%s()", function->name->chars);
-        }
-        
-        if (filename != NULL) {
-            fprintf(stderr, " (%s)", filename);
-        }
-        fprintf(stderr, "\n");
+        const char* name = function->name ? function->name->chars : NULL;
+        error_push_frame(name, line, 1);
     }
-    fprintf(stderr, "\n");
+    
+    /* Get line info from current frame */
+    int line = 0;
+    if (vm->frame_count > 0) {
+        CallFrame* frame = &vm->frames[vm->frame_count - 1];
+        size_t instruction = frame->ip - frame->function->chunk->code - 1;
+        line = frame->function->chunk->lines[instruction];
+    }
+    
+    /* Format message and call unified error */
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    zex_error(ERROR_RUNTIME, line, 0, 0, "%s", buffer);
 }
 
 void vm_init(VM* vm) {
@@ -116,12 +109,12 @@ void vm_define_native(VM* vm, const char* name, NativeFn function, int arity) {
 
 static bool call_function(VM* vm, ObjFunction* function, int argc, Value* args) {
     if (argc != function->arity) {
-        vm_runtime_error(vm, "Expected %d arguments but got %d", function->arity, argc);
+        vm_error(vm, "Expected %d arguments but got %d", function->arity, argc);
         return false;
     }
     
     if (vm->frame_count >= ZEX_MAX_FRAMES) {
-        vm_runtime_error(vm, "Stack overflow: exceeded %d frames", ZEX_MAX_FRAMES);
+        vm_error(vm, "Stack overflow: exceeded %d frames", ZEX_MAX_FRAMES);
         return false;
     }
     
@@ -129,7 +122,7 @@ static bool call_function(VM* vm, ObjFunction* function, int argc, Value* args) 
     int reg_offset = vm->reg_top;
     
     if (reg_offset + FRAME_SLOTS > ZEX_MAX_REGISTERS) {
-        vm_runtime_error(vm, "Stack overflow: exceeded %d registers", ZEX_MAX_REGISTERS);
+        vm_error(vm, "Stack overflow: exceeded %d registers", ZEX_MAX_REGISTERS);
         return false;
     }
     
@@ -151,7 +144,7 @@ static bool call_function(VM* vm, ObjFunction* function, int argc, Value* args) 
 
 static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* result) {
     if (callee.obj == NULL) {
-        vm_runtime_error(vm, "Cannot call null");
+        vm_error(vm, "Cannot call null");
         return false;
     }
     
@@ -168,7 +161,7 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
         case OBJ_NATIVE: {
             ObjNative* native = (ObjNative*)callee.obj;
             if (native->arity >= 0 && argc != native->arity) {
-                vm_runtime_error(vm, "Expected %d arguments but got %d", 
+                vm_error(vm, "Expected %d arguments but got %d", 
                                 native->arity, argc);
                 return false;
             }
@@ -204,7 +197,7 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
                         *result = INT_VAL(b->value ? 1 : 0);
                         return true;
                     }
-                    vm_runtime_error(vm, "Cannot convert '%s' to int", value_type_name(arg));
+                    vm_error(vm, "Cannot convert '%s' to int", value_type_name(arg));
                     return false;
                 }
                 
@@ -224,7 +217,7 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
                         *result = FLOAT_VAL(val);
                         return true;
                     }
-                    vm_runtime_error(vm, "Cannot convert '%s' to float", value_type_name(arg));
+                    vm_error(vm, "Cannot convert '%s' to float", value_type_name(arg));
                     return false;
                 }
                 
@@ -272,7 +265,7 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
             if (IS_NATIVE(bound->method)) {
                 ObjNative* native = AS_NATIVE(bound->method);
                 if (native->arity >= 0 && (argc + 1) != native->arity) {
-                    vm_runtime_error(vm, "Expected %d arguments but got %d", 
+                    vm_error(vm, "Expected %d arguments but got %d", 
                                     native->arity, argc + 1);
                     return false;
                 }
@@ -286,13 +279,13 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
                 *result = vm_run_frame(vm);
                 return true;
             } else {
-                vm_runtime_error(vm, "Invalid bound method type");
+                vm_error(vm, "Invalid bound method type");
                 return false;
             }
         }
         
         default:
-            vm_runtime_error(vm, "Cannot call value of type '%s'", 
+            vm_error(vm, "Cannot call value of type '%s'", 
                             value_type_name(callee));
             return false;
     }
@@ -311,7 +304,7 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
             case OP_MUL: *result = INT_VAL(va * vb); return true;
             case OP_DIV: 
                 if (vb == 0) {
-                    vm_runtime_error(vm, "Division by zero");
+                    vm_error(vm, "Division by zero");
                     return false;
                 }
                 *result = INT_VAL(va / vb); 
@@ -345,7 +338,7 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
             case OP_MUL: *result = FLOAT_VAL(va * vb); return true;
             case OP_DIV: 
                 if (vb == 0.0) {
-                    vm_runtime_error(vm, "Division by zero");
+                    vm_error(vm, "Division by zero");
                     return false;
                 }
                 *result = FLOAT_VAL(va / vb); 
@@ -390,7 +383,7 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
         return true;
     }
     
-    vm_runtime_error(vm, "Cannot perform operation on '%s' and '%s'",
+    vm_error(vm, "Cannot perform operation on '%s' and '%s'",
                     value_type_name(a), value_type_name(b));
     return false;
 }
@@ -444,7 +437,7 @@ static Value vm_run_frame(VM* vm) {
                 ObjString* name = (ObjString*)READ_CONSTANT().obj;
                 Value value;
                 if (!table_get(&vm->globals, name, &value)) {
-                    vm_runtime_error(vm, "Undefined variable '%s'", name->chars);
+                    vm_error(vm, "Undefined variable '%s'", name->chars);
                     return NULL_VAL;
                 }
                 REG(reg) = value;
@@ -511,7 +504,7 @@ static Value vm_run_frame(VM* vm) {
                     ObjFloat* f = (ObjFloat*)v.obj;
                     REG(dst) = FLOAT_VAL(-f->value);
                 } else {
-                    vm_runtime_error(vm, "Cannot negate '%s'", value_type_name(v));
+                    vm_error(vm, "Cannot negate '%s'", value_type_name(v));
                     return NULL_VAL;
                 }
                 break;
@@ -624,7 +617,7 @@ static Value vm_run_frame(VM* vm) {
                         break;
                     }
                     
-                    vm_runtime_error(vm, "Undefined property '%s'", name->chars);
+                    vm_error(vm, "Undefined property '%s'", name->chars);
                     return NULL_VAL;
                     
                 } else if (IS_CLASS(obj_val)) {
@@ -634,7 +627,7 @@ static Value vm_run_frame(VM* vm) {
                         REG(dst) = value;
                         break;
                     }
-                    vm_runtime_error(vm, "Undefined method '%s' on class", name->chars);
+                    vm_error(vm, "Undefined method '%s' on class", name->chars);
                     return NULL_VAL;
                 } else if (IS_ARRAY(obj_val)) {
                     /* Array method lookup */
@@ -645,11 +638,11 @@ static Value vm_run_frame(VM* vm) {
                         REG(dst) = OBJ_VAL(bound);
                         break;
                     }
-                    vm_runtime_error(vm, "Undefined method '%s' on array", name->chars);
+                    vm_error(vm, "Undefined method '%s' on array", name->chars);
                     return NULL_VAL;
                 }
                 
-                vm_runtime_error(vm, "Only instances have properties");
+                vm_error(vm, "Only instances have properties");
                 return NULL_VAL;
             }
             
@@ -660,7 +653,7 @@ static Value vm_run_frame(VM* vm) {
                 
                 Value obj_val = REG(obj_reg);
                 if (!IS_INSTANCE(obj_val)) {
-                    vm_runtime_error(vm, "Only instances have properties");
+                    vm_error(vm, "Only instances have properties");
                     return NULL_VAL;
                 }
                 
@@ -693,7 +686,7 @@ static Value vm_run_frame(VM* vm) {
                     
                     Value method;
                     if (!table_get(&klass->methods, name, &method)) {
-                        vm_runtime_error(vm, "Undefined method '%s'", name->chars);
+                        vm_error(vm, "Undefined method '%s'", name->chars);
                         return NULL_VAL;
                     }
                     
@@ -716,7 +709,7 @@ static Value vm_run_frame(VM* vm) {
                     ObjClass* arr_class = get_array_class();
                     Value method;
                     if (!arr_class || !table_get(&arr_class->methods, name, &method)) {
-                        vm_runtime_error(vm, "Undefined method '%s' on array", name->chars);
+                        vm_error(vm, "Undefined method '%s' on array", name->chars);
                         return NULL_VAL;
                     }
                     
@@ -731,7 +724,7 @@ static Value vm_run_frame(VM* vm) {
                     
                     REG(dst) = native->function(vm, argc + 1, args);
                 } else {
-                    vm_runtime_error(vm, "Only instances and arrays have methods");
+                    vm_error(vm, "Only instances and arrays have methods");
                     return NULL_VAL;
                 }
                 break;
@@ -743,7 +736,7 @@ static Value vm_run_frame(VM* vm) {
                 
                 Value superclass_val = REG(superclass_reg);
                 if (superclass_val.obj == NULL || superclass_val.obj->type != OBJ_CLASS) {
-                    vm_runtime_error(vm, "Superclass must be a class");
+                    vm_error(vm, "Superclass must be a class");
                     return NULL_VAL;
                 }
                 
@@ -781,11 +774,11 @@ static Value vm_run_frame(VM* vm) {
                 Value idx_val = REG(idx_reg);
                 
                 if (!IS_ARRAY(arr_val)) {
-                    vm_runtime_error(vm, "Can only index arrays");
+                    vm_error(vm, "Can only index arrays");
                     return NULL_VAL;
                 }
                 if (!IS_INT(idx_val)) {
-                    vm_runtime_error(vm, "Array index must be an integer");
+                    vm_error(vm, "Array index must be an integer");
                     return NULL_VAL;
                 }
                 
@@ -793,7 +786,7 @@ static Value vm_run_frame(VM* vm) {
                 int idx = (int)((ObjInt*)idx_val.obj)->value;
                 
                 if (idx < 0 || idx >= arr->count) {
-                    vm_runtime_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                    vm_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
                     return NULL_VAL;
                 }
                 
@@ -810,11 +803,11 @@ static Value vm_run_frame(VM* vm) {
                 Value idx_val = REG(idx_reg);
                 
                 if (!IS_ARRAY(arr_val)) {
-                    vm_runtime_error(vm, "Can only index arrays");
+                    vm_error(vm, "Can only index arrays");
                     return NULL_VAL;
                 }
                 if (!IS_INT(idx_val)) {
-                    vm_runtime_error(vm, "Array index must be an integer");
+                    vm_error(vm, "Array index must be an integer");
                     return NULL_VAL;
                 }
                 
@@ -822,7 +815,7 @@ static Value vm_run_frame(VM* vm) {
                 int idx = (int)((ObjInt*)idx_val.obj)->value;
                 
                 if (idx < 0 || idx >= arr->count) {
-                    vm_runtime_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                    vm_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
                     return NULL_VAL;
                 }
                 
@@ -831,7 +824,7 @@ static Value vm_run_frame(VM* vm) {
             }
             
             default:
-                vm_runtime_error(vm, "Unknown opcode %d", instruction);
+                vm_error(vm, "Unknown opcode %d", instruction);
                 return NULL_VAL;
         }
     }
