@@ -76,11 +76,6 @@ typedef enum {
     OP_SET_PROPERTY,    /* Robj, idx16, Rval -- Robj.constants[idx] = Rval */
     OP_METHOD,          /* Rclass, idx16 -- add method to class */
     OP_INVOKE,          /* Rdst, Robj, idx16, argc -- invoke method */
-    
-    /* Special */
-    OP_POP,             /* Discard top register value (not really used in reg VM) */
-    OP_PRINT,           /* R -- print R (debug) */
-    OP_HALT,            /* Stop execution */
 } OpCode;
 
 /* Get opcode name for debugging */

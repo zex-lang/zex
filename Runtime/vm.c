@@ -695,17 +695,6 @@ static Value vm_run_frame(VM* vm) {
                 break;
             }
             
-            case OP_PRINT: {
-                uint8_t reg = READ_BYTE();
-                print_value(REG(reg));
-                printf("\n");
-                break;
-            }
-            
-            case OP_HALT: {
-                return NULL_VAL;
-            }
-            
             default:
                 vm_runtime_error(vm, "Unknown opcode %d", instruction);
                 return NULL_VAL;

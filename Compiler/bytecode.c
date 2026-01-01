@@ -49,9 +49,6 @@ const char* opcode_name(OpCode op) {
         case OP_SET_PROPERTY:   return "SET_PROPERTY";
         case OP_METHOD:         return "METHOD";
         case OP_INVOKE:         return "INVOKE";
-        case OP_POP:            return "POP";
-        case OP_PRINT:          return "PRINT";
-        case OP_HALT:           return "HALT";
         default:                return "UNKNOWN";
     }
 }
@@ -61,8 +58,6 @@ int opcode_operand_count(OpCode op) {
         case OP_LOAD_NULL:
         case OP_LOAD_TRUE:
         case OP_LOAD_FALSE:
-        case OP_POP:
-        case OP_HALT:
             return 1;  /* Just register */
             
         case OP_MOVE:
@@ -70,7 +65,6 @@ int opcode_operand_count(OpCode op) {
         case OP_NOT:
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
-        case OP_PRINT:
         case OP_RETURN:
             return 2;
             
@@ -157,11 +151,6 @@ int chunk_add_constant(Chunk* chunk, Value value) {
     
     chunk->constants[chunk->const_count] = value;
     return chunk->const_count++;
-}
-
-static int simple_instruction(const char* name, int offset) {
-    printf("%s\n", name);
-    return offset + 1;
 }
 
 static int register_instruction(const char* name, Chunk* chunk, int offset) {
@@ -307,12 +296,6 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
                    AS_STRING(chunk->constants[idx])->chars, argc);
             return offset + 6;
         }
-        case OP_POP:
-            return simple_instruction("POP", offset);
-        case OP_PRINT:
-            return register_instruction("PRINT", chunk, offset);
-        case OP_HALT:
-            return simple_instruction("HALT", offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
