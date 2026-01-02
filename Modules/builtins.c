@@ -10,6 +10,7 @@
 #include "object.h"
 #include "stringobject.h"
 #include "nullobject.h"
+#include "exceptionobject.h"
 
 /*
  * println(args...)
@@ -93,4 +94,15 @@ void register_builtins(VM* vm) {
     table_set(&vm->globals, new_string_cstr("string"), OBJ_VAL(vm->string_class));
     table_set(&vm->globals, new_string_cstr("bool"), OBJ_VAL(vm->bool_class));
     table_set(&vm->globals, new_string_cstr("null"), OBJ_VAL(vm->null_class));
+    
+    /* Register exception classes */
+    table_set(&vm->globals, new_string_cstr("Exception"), OBJ_VAL(get_exception_class()));
+    table_set(&vm->globals, new_string_cstr("ValueError"), OBJ_VAL(get_value_error_class()));
+    table_set(&vm->globals, new_string_cstr("TypeError"), OBJ_VAL(get_type_error_class()));
+    table_set(&vm->globals, new_string_cstr("IndexError"), OBJ_VAL(get_index_error_class()));
+    table_set(&vm->globals, new_string_cstr("ZeroDivisionError"), OBJ_VAL(get_zero_division_error_class()));
+    table_set(&vm->globals, new_string_cstr("AttributeError"), OBJ_VAL(get_attribute_error_class()));
+    table_set(&vm->globals, new_string_cstr("NameError"), OBJ_VAL(get_name_error_class()));
+    table_set(&vm->globals, new_string_cstr("RuntimeError"), OBJ_VAL(get_runtime_error_class()));
 }
+

@@ -95,6 +95,7 @@ static TokenType check_keyword(Lexer* lexer, int start, int length,
 
 static TokenType identifier_type(Lexer* lexer) {
     switch (lexer->start[0]) {
+        case 'a': return check_keyword(lexer, 1, 1, "s", TOKEN_AS);
         case 'b': return check_keyword(lexer, 1, 4, "reak", TOKEN_BREAK);
         case 'c':
             if (lexer->current - lexer->start > 1) {
@@ -105,11 +106,19 @@ static TokenType identifier_type(Lexer* lexer) {
             }
             break;
         case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);
-        case 'e': return check_keyword(lexer, 1, 3, "lse", TOKEN_ELSE);
+        case 'e':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'l': return check_keyword(lexer, 2, 2, "se", TOKEN_ELSE);
+                    case 'x': return check_keyword(lexer, 2, 4, "cept", TOKEN_EXCEPT);
+                }
+            }
+            break;
         case 'f':
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
                     case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
+                    case 'i': return check_keyword(lexer, 2, 5, "nally", TOKEN_FINALLY);
                     case 'o': return check_keyword(lexer, 2, 1, "r", TOKEN_FOR);
                     case 'u': return check_keyword(lexer, 2, 1, "n", TOKEN_FUN);
                 }
@@ -124,9 +133,27 @@ static TokenType identifier_type(Lexer* lexer) {
             }
             break;
         case 'n': return check_keyword(lexer, 1, 3, "ull", TOKEN_NULL);
-        case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
+        case 'r':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'e': return check_keyword(lexer, 2, 4, "turn", TOKEN_RETURN);
+                    case 'a': return check_keyword(lexer, 2, 3, "ise", TOKEN_RAISE);
+                }
+            }
+            break;
         case 's': return check_keyword(lexer, 1, 3, "elf", TOKEN_SELF);
-        case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 't':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'r':
+                        if (lexer->current - lexer->start == 4) {
+                            return check_keyword(lexer, 2, 2, "ue", TOKEN_TRUE);
+                        }
+                        return check_keyword(lexer, 2, 1, "y", TOKEN_TRY);
+                    default: break;
+                }
+            }
+            break;
         case 'v': return check_keyword(lexer, 1, 2, "ar", TOKEN_VAR);
         case 'w': return check_keyword(lexer, 1, 4, "hile", TOKEN_WHILE);
     }

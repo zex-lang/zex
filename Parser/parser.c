@@ -1024,7 +1024,95 @@ static ASTNode* continue_statement(void) {
     return ast_new_continue(continue_token.line, continue_token.column);
 }
 
+static ASTNode* try_statement(void) {
+    Token try_token = current_parser->previous;
+    
+    skip_newlines();
+    consume(TOKEN_LEFT_BRACE, "Expected '{' after try");
+    ASTNode* try_body = block();
+    
+    /* Parse except handlers */
+    ExceptHandler* handlers = NULL;
+    int handler_count = 0;
+    int handler_capacity = 0;
+    
+    skip_newlines();
+    while (match(TOKEN_EXCEPT)) {
+        ExceptHandler handler = {NULL, NULL, NULL};
+        
+        skip_newlines();
+        
+        /* Optional exception type */
+        if (check(TOKEN_IDENTIFIER)) {
+            advance();
+            handler.type = zex_strndup(current_parser->previous.start,
+                                        current_parser->previous.length);
+        }
+        
+        /* Optional 'as var' */
+        skip_newlines();
+        if (match(TOKEN_AS)) {
+            consume(TOKEN_IDENTIFIER, "Expected variable name after 'as'");
+            handler.var = zex_strndup(current_parser->previous.start,
+                                       current_parser->previous.length);
+        }
+        
+        skip_newlines();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after except");
+        handler.body = block();
+        
+        /* Add handler to array */
+        if (handler_count >= handler_capacity) {
+            handler_capacity = GROW_CAPACITY(handler_capacity);
+            handlers = GROW_ARRAY(ExceptHandler, handlers, handler_count, handler_capacity);
+        }
+        handlers[handler_count++] = handler;
+        
+        skip_newlines();
+    }
+    
+    /* Parse optional else */
+    ASTNode* else_body = NULL;
+    if (match(TOKEN_ELSE)) {
+        skip_newlines();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after else");
+        else_body = block();
+        skip_newlines();
+    }
+    
+    /* Parse optional finally */
+    ASTNode* finally_body = NULL;
+    if (match(TOKEN_FINALLY)) {
+        skip_newlines();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after finally");
+        finally_body = block();
+    }
+    
+    return ast_new_try(try_body, handlers, handler_count, else_body, finally_body,
+                       try_token.line, try_token.column);
+}
+
+static ASTNode* raise_statement(void) {
+    Token raise_token = current_parser->previous;
+    
+    ASTNode* exception = NULL;
+    if (!check(TOKEN_NEWLINE) && !check(TOKEN_EOF) && !check(TOKEN_RIGHT_BRACE)) {
+        exception = expression();
+    }
+    
+    consume_line_end();
+    return ast_new_raise(exception, raise_token.line, raise_token.column);
+}
+
 static ASTNode* statement(void) {
+    if (match(TOKEN_TRY)) {
+        return try_statement();
+    }
+    
+    if (match(TOKEN_RAISE)) {
+        return raise_statement();
+    }
+    
     if (match(TOKEN_IF)) {
         return if_statement();
     }

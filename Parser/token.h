@@ -69,6 +69,11 @@ typedef enum {
     TOKEN_IN,
     TOKEN_AND,              /* Reserved for future */
     TOKEN_OR,               /* Reserved for future */
+    TOKEN_TRY,
+    TOKEN_EXCEPT,
+    TOKEN_FINALLY,
+    TOKEN_RAISE,
+    TOKEN_AS,
     
     /* Special */
     TOKEN_NEWLINE,

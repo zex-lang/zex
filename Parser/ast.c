@@ -248,6 +248,23 @@ ASTNode* ast_new_program(ASTNode** statements, int count) {
     return node;
 }
 
+ASTNode* ast_new_try(ASTNode* try_body, ExceptHandler* handlers, int handler_count,
+                     ASTNode* else_body, ASTNode* finally_body, int line, int column) {
+    ASTNode* node = alloc_node(AST_TRY, line, column);
+    node->as.try_stmt.try_body = try_body;
+    node->as.try_stmt.handlers = handlers;
+    node->as.try_stmt.handler_count = handler_count;
+    node->as.try_stmt.else_body = else_body;
+    node->as.try_stmt.finally_body = finally_body;
+    return node;
+}
+
+ASTNode* ast_new_raise(ASTNode* exception, int line, int column) {
+    ASTNode* node = alloc_node(AST_RAISE, line, column);
+    node->as.raise_stmt.exception = exception;
+    return node;
+}
+
 void ast_free(ASTNode* node) {
     if (node == NULL) return;
     
@@ -422,6 +439,29 @@ void ast_free(ASTNode* node) {
                 ast_free(node->as.program.statements[i]);
             }
             FREE_ARRAY(ASTNode*, node->as.program.statements, node->as.program.count);
+            break;
+            
+        case AST_TRY:
+            ast_free(node->as.try_stmt.try_body);
+            for (int i = 0; i < node->as.try_stmt.handler_count; i++) {
+                ExceptHandler* handler = &node->as.try_stmt.handlers[i];
+                if (handler->type) {
+                    zex_free(handler->type, strlen(handler->type) + 1);
+                }
+                if (handler->var) {
+                    zex_free(handler->var, strlen(handler->var) + 1);
+                }
+                ast_free(handler->body);
+            }
+            if (node->as.try_stmt.handlers) {
+                FREE_ARRAY(ExceptHandler, node->as.try_stmt.handlers, node->as.try_stmt.handler_count);
+            }
+            ast_free(node->as.try_stmt.else_body);
+            ast_free(node->as.try_stmt.finally_body);
+            break;
+            
+        case AST_RAISE:
+            ast_free(node->as.raise_stmt.exception);
             break;
     }
     
@@ -621,6 +661,40 @@ void ast_print(ASTNode* node, int indent) {
             printf("PROGRAM(%d stmts)\n", node->as.program.count);
             for (int i = 0; i < node->as.program.count; i++) {
                 ast_print(node->as.program.statements[i], indent + 1);
+            }
+            break;
+        case AST_TRY:
+            printf("TRY\n");
+            print_indent(indent);
+            printf("BODY:\n");
+            ast_print(node->as.try_stmt.try_body, indent + 1);
+            for (int i = 0; i < node->as.try_stmt.handler_count; i++) {
+                ExceptHandler* handler = &node->as.try_stmt.handlers[i];
+                print_indent(indent);
+                if (handler->type) {
+                    printf("EXCEPT %s", handler->type);
+                    if (handler->var) printf(" as %s", handler->var);
+                    printf(":\n");
+                } else {
+                    printf("EXCEPT (bare):\n");
+                }
+                ast_print(handler->body, indent + 1);
+            }
+            if (node->as.try_stmt.else_body) {
+                print_indent(indent);
+                printf("ELSE:\n");
+                ast_print(node->as.try_stmt.else_body, indent + 1);
+            }
+            if (node->as.try_stmt.finally_body) {
+                print_indent(indent);
+                printf("FINALLY:\n");
+                ast_print(node->as.try_stmt.finally_body, indent + 1);
+            }
+            break;
+        case AST_RAISE:
+            printf("RAISE\n");
+            if (node->as.raise_stmt.exception) {
+                ast_print(node->as.raise_stmt.exception, indent + 1);
             }
             break;
     }

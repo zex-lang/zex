@@ -25,6 +25,7 @@ typedef enum {
     OBJ_NATIVE,
     OBJ_BOUND_METHOD,
     OBJ_ARRAY,
+    OBJ_EXCEPTION,
 } ObjType;
 
 /*
@@ -65,6 +66,8 @@ typedef struct {
 #define IS_INSTANCE(value)  (is_obj_type(value, OBJ_INSTANCE))
 #define IS_NATIVE(value)    (is_obj_type(value, OBJ_NATIVE))
 #define IS_BOUND_METHOD(value) (is_obj_type(value, OBJ_BOUND_METHOD))
+#define IS_ARRAY(value)     (is_obj_type(value, OBJ_ARRAY))
+#define IS_EXCEPTION(value) (is_obj_type(value, OBJ_EXCEPTION))
 
 /* Type checking helper */
 static inline bool is_obj_type(Value value, ObjType type) {

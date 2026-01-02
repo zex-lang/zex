@@ -48,6 +48,8 @@ typedef enum {
     AST_FUN_DECL,
     AST_CLASS_DECL,
     AST_PROGRAM,
+    AST_TRY,
+    AST_RAISE,
 } ASTNodeType;
 
 /* Binary operators */
@@ -92,6 +94,13 @@ typedef struct {
     int count;
     int capacity;
 } ParameterList;
+
+/* Except handler: except ExceptionType as var { body } */
+typedef struct {
+    char* type;             /* Exception type name, NULL for bare except */
+    char* var;              /* Variable name for exception, NULL if not captured */
+    ASTNode* body;          /* Handler body (block) */
+} ExceptHandler;
 
 /* AST node structure - union of all node types */
 struct ASTNode {
@@ -287,6 +296,20 @@ struct ASTNode {
             ASTNode** statements;
             int count;
         } program;
+        
+        /* AST_TRY */
+        struct {
+            ASTNode* try_body;
+            ExceptHandler* handlers;
+            int handler_count;
+            ASTNode* else_body;     /* Can be NULL */
+            ASTNode* finally_body;  /* Can be NULL */
+        } try_stmt;
+        
+        /* AST_RAISE */
+        struct {
+            ASTNode* exception;     /* Expression, NULL for re-raise */
+        } raise_stmt;
     } as;
 };
 
@@ -325,6 +348,9 @@ ASTNode* ast_new_index_get(ASTNode* object, ASTNode* index, int line, int column
 ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int line, int column);
 ASTNode* ast_new_closure(ParameterList params, ASTNode* body, bool is_expression, int line, int column);
 ASTNode* ast_new_program(ASTNode** statements, int count);
+ASTNode* ast_new_try(ASTNode* try_body, ExceptHandler* handlers, int handler_count,
+                     ASTNode* else_body, ASTNode* finally_body, int line, int column);
+ASTNode* ast_new_raise(ASTNode* exception, int line, int column);
 
 /* Free AST */
 void ast_free(ASTNode* node);

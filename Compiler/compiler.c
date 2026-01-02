@@ -1322,6 +1322,143 @@ static void compile_class_decl(ASTNode* node) {
     free_reg(1);
 }
 
+static void compile_try(ASTNode* node) {
+    /* Emit OP_TRY_BEGIN with placeholder for handler offset */
+    emit_byte(OP_TRY_BEGIN, node->line);
+    int try_begin_offset = current_chunk()->count;
+    emit_byte16(0xFFFF, node->line);  /* Placeholder */
+    
+    /* Compile try body */
+    compile_node(node->as.try_stmt.try_body, 0);
+    
+    /* Emit OP_TRY_END if no exception */
+    emit_byte(OP_TRY_END, node->line);
+    
+    /* Jump over exception handlers and else to finally/end */
+    emit_byte(OP_JUMP, node->line);
+    int try_success_jump = current_chunk()->count;
+    emit_byte16(0xFFFF, node->line);  /* Placeholder */
+    
+    /* Patch try_begin to point here (exception landing pad) */
+    int handler_start = current_chunk()->count;
+    int jump_dist = handler_start - try_begin_offset - 2;
+    current_chunk()->code[try_begin_offset] = jump_dist & 0xFF;
+    current_chunk()->code[try_begin_offset + 1] = (jump_dist >> 8) & 0xFF;
+    
+    /* Compile each except handler */
+    int* handler_exit_jumps = NULL;
+    int handler_exit_count = 0;
+    
+    for (int i = 0; i < node->as.try_stmt.handler_count; i++) {
+        ExceptHandler* handler = &node->as.try_stmt.handlers[i];
+        
+        if (handler->type != NULL) {
+            /* Check exception type */
+            int check_reg = alloc_reg();
+            int type_idx = identifier_constant(handler->type);
+            emit_byte(OP_CHECK_EXC_TYPE, node->line);
+            emit_byte(check_reg, node->line);
+            emit_byte16(type_idx, node->line);
+            
+            /* Jump to next handler if type doesn't match */
+            int skip_jump = emit_jump(OP_JUMP_IF_FALSE, check_reg, node->line);
+            free_reg(1);
+            
+            /* Handler matches - bind exception to variable if requested */
+            if (handler->var != NULL) {
+                /* Add local for exception variable */
+                int slot = scope_add_local(&current->scope, handler->var, strlen(handler->var));
+                if (slot >= 0) {
+                    emit_byte(OP_GET_EXCEPTION, node->line);
+                    emit_byte(slot, node->line);
+                    if (current->next_reg <= slot) {
+                        current->next_reg = slot + 1;
+                    }
+                }
+            }
+            
+            emit_byte(OP_CLEAR_EXCEPTION, node->line);
+            compile_node(handler->body, 0);
+            
+            /* Jump to finally */
+            handler_exit_jumps = GROW_ARRAY(int, handler_exit_jumps, handler_exit_count, handler_exit_count + 1);
+            emit_byte(OP_JUMP, node->line);
+            handler_exit_jumps[handler_exit_count++] = current_chunk()->count;
+            emit_byte16(0xFFFF, node->line);
+            
+            patch_jump(skip_jump);
+        } else {
+            /* Bare except catches all */
+            if (handler->var != NULL) {
+                int slot = scope_add_local(&current->scope, handler->var, strlen(handler->var));
+                if (slot >= 0) {
+                    emit_byte(OP_GET_EXCEPTION, node->line);
+                    emit_byte(slot, node->line);
+                    if (current->next_reg <= slot) {
+                        current->next_reg = slot + 1;
+                    }
+                }
+            }
+            
+            emit_byte(OP_CLEAR_EXCEPTION, node->line);
+            compile_node(handler->body, 0);
+            
+            /* Jump to finally */
+            handler_exit_jumps = GROW_ARRAY(int, handler_exit_jumps, handler_exit_count, handler_exit_count + 1);
+            emit_byte(OP_JUMP, node->line);
+            handler_exit_jumps[handler_exit_count++] = current_chunk()->count;
+            emit_byte16(0xFFFF, node->line);
+        }
+    }
+    
+    /* If no handler matched, re-raise */
+    emit_byte(OP_RAISE, node->line);
+    emit_byte(0xFF, node->line);  /* 0xFF = re-raise current exception */
+    
+    /* Patch success jump to else or finally */
+    int after_handlers = current_chunk()->count;
+    jump_dist = after_handlers - try_success_jump - 2;
+    current_chunk()->code[try_success_jump] = jump_dist & 0xFF;
+    current_chunk()->code[try_success_jump + 1] = (jump_dist >> 8) & 0xFF;
+    
+    /* Compile else (runs if no exception) */
+    if (node->as.try_stmt.else_body != NULL) {
+        compile_node(node->as.try_stmt.else_body, 0);
+    }
+    
+    /* Patch all handler exit jumps */
+    int finally_start = current_chunk()->count;
+    for (int i = 0; i < handler_exit_count; i++) {
+        jump_dist = finally_start - handler_exit_jumps[i] - 2;
+        current_chunk()->code[handler_exit_jumps[i]] = jump_dist & 0xFF;
+        current_chunk()->code[handler_exit_jumps[i] + 1] = (jump_dist >> 8) & 0xFF;
+    }
+    
+    if (handler_exit_jumps != NULL) {
+        FREE_ARRAY(int, handler_exit_jumps, handler_exit_count);
+    }
+    
+    /* Compile finally (always runs) */
+    if (node->as.try_stmt.finally_body != NULL) {
+        compile_node(node->as.try_stmt.finally_body, 0);
+    }
+}
+
+static void compile_raise(ASTNode* node) {
+    if (node->as.raise_stmt.exception != NULL) {
+        /* Compile expression and raise it */
+        int exc_reg = alloc_reg();
+        compile_expression(node->as.raise_stmt.exception, exc_reg);
+        emit_byte(OP_RAISE, node->line);
+        emit_byte(exc_reg, node->line);
+        free_reg(1);
+    } else {
+        /* Re-raise current exception */
+        emit_byte(OP_RAISE, node->line);
+        emit_byte(0xFF, node->line);
+    }
+}
+
 static void compile_node(ASTNode* node, int dest_reg) {
     UNUSED(dest_reg);
     
@@ -1376,6 +1513,12 @@ static void compile_node(ASTNode* node, int dest_reg) {
             break;
         case AST_CLASS_DECL:
             compile_class_decl(node);
+            break;
+        case AST_TRY:
+            compile_try(node);
+            break;
+        case AST_RAISE:
+            compile_raise(node);
             break;
         default:
             /* Expression statement */

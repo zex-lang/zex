@@ -86,6 +86,14 @@ typedef enum {
     
     /* Iterators (for-in loops) */
     OP_ITER_NEXT,       /* Rval, Ridx, Rarr, offset16 -- get arr[idx], idx++, jump if done */
+    
+    /* Exception handling */
+    OP_TRY_BEGIN,       /* offset16 -- push exception handler, jump to offset on exception */
+    OP_TRY_END,         /* -- pop exception handler (successful try completion) */
+    OP_RAISE,           /* R -- raise exception in R (0xFF = re-raise current exception) */
+    OP_CHECK_EXC_TYPE,  /* Rdst, idx16 -- check if current exception matches type, bool to Rdst */
+    OP_GET_EXCEPTION,   /* R -- get current exception into R */
+    OP_CLEAR_EXCEPTION, /* -- clear current exception (after handling) */
 } OpCode;
 
 /* Get opcode name for debugging */

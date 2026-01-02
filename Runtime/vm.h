@@ -16,6 +16,7 @@
 
 #define ZEX_MAX_FRAMES 256
 #define ZEX_MAX_REGISTERS 8192
+#define ZEX_MAX_EXCEPTION_HANDLERS 64
 
 /* Call frame */
 typedef struct {
@@ -24,6 +25,13 @@ typedef struct {
     Value* registers;       /* Base of register window */
     int reg_offset;         /* Offset into VM's register array */
 } CallFrame;
+
+/* Exception handler entry */
+typedef struct {
+    uint8_t* handler_ip;    /* IP to jump to on exception */
+    int frame_index;        /* Frame index when handler was pushed */
+    int reg_top;            /* Register top when handler was pushed */
+} ExceptionHandler;
 
 /* Virtual machine state */
 struct VM {
@@ -42,6 +50,12 @@ struct VM {
     ObjClass* bool_class;
     ObjClass* null_class;
     ObjClass* string_class;
+    
+    /* Exception handling */
+    ExceptionHandler exception_handlers[ZEX_MAX_EXCEPTION_HANDLERS];
+    int exception_handler_count;
+    Value current_exception;     /* Current exception being propagated */
+    bool has_exception;          /* True if an exception is pending */
     
     /* GC tracking */
     Obj* objects;

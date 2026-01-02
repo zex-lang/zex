@@ -169,3 +169,74 @@ void zex_error(ErrorType type, int line, int column, int span,
     
     fprintf(stderr, "\n");
 }
+
+void zex_exception(const char* type_name, int line, int column, int span, 
+                   const char* format, ...) {
+    g_had_error = true;
+    
+    /* Get source line */
+    const char* line_start;
+    int line_length;
+    get_source_line(g_source, line, &line_start, &line_length);
+    
+    fprintf(stderr, "\n");
+    
+    /* Header: at Line N, ExceptionType: message */
+    fprintf(stderr, "%s%sat Line %d, %s:%s ", 
+            COLOR_BOLD, COLOR_RED, line, type_name, COLOR_RESET);
+    
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    
+    fprintf(stderr, "\n");
+    
+    /* Source line (always show if available) */
+    if (line_length > 0) {
+        /* Find leading whitespace count */
+        int leading_spaces = 0;
+        while (leading_spaces < line_length && 
+               (line_start[leading_spaces] == ' ' || line_start[leading_spaces] == '\t')) {
+            leading_spaces++;
+        }
+        
+        fprintf(stderr, "  %.*s\n", line_length - leading_spaces, line_start + leading_spaces);
+        
+        /* Pointer under error (only when we have accurate column info) */
+        if (column > 0) {
+            fprintf(stderr, "  ");
+            int adjusted_col = column - 1 - leading_spaces;
+            if (adjusted_col < 0) adjusted_col = 0;
+            
+            for (int i = 0; i < adjusted_col; i++) {
+                fprintf(stderr, " ");
+            }
+            fprintf(stderr, "%s%s", COLOR_RED, COLOR_BOLD);
+            int underline_len = span > 0 ? span : 1;
+            for (int i = 0; i < underline_len; i++) {
+                fprintf(stderr, "^");
+            }
+            fprintf(stderr, "%s\n", COLOR_RESET);
+        }
+    }
+    
+    /* Stack trace (only if we have frames) */
+    if (g_frame_count > 0) {
+        fprintf(stderr, "\nStack trace:\n");
+        for (int i = g_frame_count - 1; i >= 0; i--) {
+            ErrorFrame* frame = &g_frames[i];
+            fprintf(stderr, "  in %s%s%s (%s%s:%d:%d%s)\n",
+                    COLOR_CYAN, 
+                    frame->name ? frame->name : "<script>",
+                    COLOR_RESET,
+                    COLOR_BOLD,
+                    g_filename ? g_filename : "<unknown>",
+                    frame->line,
+                    frame->column,
+                    COLOR_RESET);
+        }
+    }
+    
+    fprintf(stderr, "\n");
+}

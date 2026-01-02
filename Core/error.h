@@ -51,4 +51,8 @@ void error_clear_frames(void);
 void zex_error(ErrorType type, int line, int column, int span, 
                const char* format, ...) __attribute__((format(printf, 5, 6)));
 
+/* Report an exception with custom type name (for exception classes) */
+void zex_exception(const char* type_name, int line, int column, int span, 
+                   const char* format, ...) __attribute__((format(printf, 5, 6)));
+
 #endif /* ZEX_ERROR_H */

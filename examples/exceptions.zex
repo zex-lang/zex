@@ -1,0 +1,60 @@
+# Exception Handling in Zex
+# Python-like try/except/else/finally syntax
+
+# Basic try/except with division by zero
+println(" Basic try/except ")
+try {
+    var x = 1 / 0
+} except {
+    println("Caught division by zero!")
+}
+
+# Exception with type checking (IndexError)
+println("")
+println(" Exception with type ")
+try {
+    var arr = [1, 2, 3]
+    println(arr[10])
+} except IndexError as e {
+    println("Caught: " + string(e))
+}
+
+# Else block (runs if no exception)
+println("")
+println(" Else block ")
+try {
+    var x = 10 + 5
+    println("Calculated: " + string(x))
+} except {
+    println("This won't run")
+} else {
+    println("No exception occurred!")
+}
+
+# Finally block (always runs)
+println("")
+println(" Finally block ")
+try {
+    println("In try block")
+} except {
+    println("In except block")
+} finally {
+    println("In finally (always runs)")
+}
+
+# Nested try/except
+println("")
+println(" Nested try/except ")
+try {
+    try {
+        var arr = []
+        println(arr[5])
+    } except ZeroDivisionError {
+        println("Wrong handler")
+    }
+} except IndexError {
+    println("Caught IndexError in outer handler")
+}
+
+println("")
+println("Exception handling complete!")

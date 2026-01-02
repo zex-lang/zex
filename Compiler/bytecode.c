@@ -61,6 +61,12 @@ const char* opcode_name(OpCode op) {
         case OP_INDEX_GET:      return "INDEX_GET";
         case OP_INDEX_SET:      return "INDEX_SET";
         case OP_ITER_NEXT:      return "ITER_NEXT";
+        case OP_TRY_BEGIN:      return "TRY_BEGIN";
+        case OP_TRY_END:        return "TRY_END";
+        case OP_RAISE:          return "RAISE";
+        case OP_CHECK_EXC_TYPE: return "CHECK_EXC_TYPE";
+        case OP_GET_EXCEPTION:  return "GET_EXCEPTION";
+        case OP_CLEAR_EXCEPTION: return "CLEAR_EXCEPTION";
         default:                return "UNKNOWN";;
     }
 }
@@ -123,6 +129,20 @@ int opcode_operand_count(OpCode op) {
         
         case OP_ITER_NEXT:
             return 5;  /* Rval, Ridx, Rarr, offset16 */
+        
+        case OP_TRY_BEGIN:
+            return 2;  /* offset16 */
+        
+        case OP_TRY_END:
+        case OP_CLEAR_EXCEPTION:
+            return 0;  /* No operands */
+        
+        case OP_RAISE:
+        case OP_GET_EXCEPTION:
+            return 1;  /* R */
+        
+        case OP_CHECK_EXC_TYPE:
+            return 3;  /* Rdst, idx16 */
             
         default:
             return 1;

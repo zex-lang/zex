@@ -14,6 +14,7 @@
 #include "nullobject.h"
 #include "classobject.h"
 #include "arrayobject.h"
+#include "exceptionobject.h"
 #include <math.h>
 
 /* Forward declare vm_run_frame */
@@ -57,6 +58,55 @@ void vm_error(VM* vm, const char* format, ...) {
     zex_error(ERROR_RUNTIME, line, 0, 0, "%s", buffer);
 }
 
+/* 
+ * Create a runtime exception and store it in the VM.
+ * Returns true if an exception handler exists, false otherwise.
+ * The caller should check the return value and either continue (if true)
+ * or return (if false).
+ */
+static bool vm_runtime_exception(VM* vm, ObjClass* exc_class, const char* format, ...) {
+    /* Get line info from current frame */
+    int line = 0;
+    if (vm->frame_count > 0) {
+        CallFrame* frame = &vm->frames[vm->frame_count - 1];
+        size_t instruction = frame->ip - frame->function->chunk->code - 1;
+        line = frame->function->chunk->lines[instruction];
+    }
+    
+    /* Format message */
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    /* Create exception object */
+    ObjException* exc = new_exception_cstr(exc_class, buffer, line, 0, 0);
+    vm->current_exception = OBJ_VAL(exc);
+    vm->has_exception = true;
+    
+    /* Check if there's a handler */
+    if (vm->exception_handler_count > 0) {
+        return true;  /* Handler exists, caller should jump to it */
+    }
+    
+    /* No handler - print exception with class name */
+    error_clear_frames();
+    for (int i = vm->frame_count - 1; i >= 0; i--) {
+        CallFrame* frame = &vm->frames[i];
+        ObjFunction* function = frame->function;
+        size_t instruction = frame->ip - function->chunk->code - 1;
+        int frame_line = function->chunk->lines[instruction];
+        const char* name = function->name ? function->name->chars : NULL;
+        error_push_frame(name, frame_line, 1);
+    }
+    
+    const char* class_name = exc_class && exc_class->name ? exc_class->name->chars : "Exception";
+    zex_exception(class_name, line, 0, 0, "%s", buffer);
+    return false;
+}
+
+
 void vm_init(VM* vm) {
     vm->frame_count = 0;
     vm->reg_top = 0;
@@ -83,6 +133,12 @@ void vm_init(VM* vm) {
     vm->string_class = get_string_class();
     vm->int_class = get_int_class();
     vm->float_class = get_float_class();
+    
+    /* Initialize exception handling */
+    init_exception_classes();
+    vm->exception_handler_count = 0;
+    vm->current_exception = NULL_VAL;
+    vm->has_exception = false;
     
     /* Initialize registers to null */
     for (int i = 0; i < ZEX_MAX_REGISTERS; i++) {
@@ -330,14 +386,14 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
             case OP_MUL: *result = INT_VAL(va * vb); return true;
             case OP_DIV: 
                 if (vb == 0) {
-                    vm_error(vm, "Division by zero");
+                    vm_runtime_exception(vm, get_zero_division_error_class(), "Division by zero");
                     return false;
                 }
                 *result = INT_VAL(va / vb); 
                 return true;
             case OP_MOD:
                 if (vb == 0) {
-                    vm_error(vm, "Modulo by zero");
+                    vm_runtime_exception(vm, get_zero_division_error_class(), "Modulo by zero");
                     return false;
                 }
                 *result = INT_VAL(va % vb);
@@ -371,14 +427,14 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
             case OP_MUL: *result = FLOAT_VAL(va * vb); return true;
             case OP_DIV: 
                 if (vb == 0.0) {
-                    vm_error(vm, "Division by zero");
+                    vm_runtime_exception(vm, get_zero_division_error_class(), "Division by zero");
                     return false;
                 }
                 *result = FLOAT_VAL(va / vb); 
                 return true;
             case OP_MOD:
                 if (vb == 0.0) {
-                    vm_error(vm, "Modulo by zero");
+                    vm_runtime_exception(vm, get_zero_division_error_class(), "Modulo by zero");
                     return false;
                 }
                 *result = FLOAT_VAL(fmod(va, vb));
@@ -528,6 +584,17 @@ static Value vm_run_frame(VM* vm) {
                 uint8_t rb = READ_BYTE();
                 Value result;
                 if (!binary_op(vm, instruction, REG(ra), REG(rb), &result)) {
+                    /* Check if exception was raised and we have a handler */
+                    if (vm->has_exception && vm->exception_handler_count > 0) {
+                        ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                        while (vm->frame_count > handler->frame_index + 1) {
+                            vm->frame_count--;
+                        }
+                        vm->reg_top = handler->reg_top;
+                        frame = &vm->frames[vm->frame_count - 1];
+                        frame->ip = handler->handler_ip;
+                        break;
+                    }
                     return NULL_VAL;
                 }
                 REG(dst) = result;
@@ -808,7 +875,14 @@ static Value vm_run_frame(VM* vm) {
                 Value idx_val = REG(idx_reg);
                 
                 if (!IS_INT(idx_val)) {
-                    vm_error(vm, "Index must be an integer");
+                    if (vm_runtime_exception(vm, get_type_error_class(), "Index must be an integer")) {
+                        ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                        while (vm->frame_count > handler->frame_index + 1) vm->frame_count--;
+                        vm->reg_top = handler->reg_top;
+                        frame = &vm->frames[vm->frame_count - 1];
+                        frame->ip = handler->handler_ip;
+                        break;
+                    }
                     return NULL_VAL;
                 }
                 
@@ -821,7 +895,15 @@ static Value vm_run_frame(VM* vm) {
                     if (idx < 0) idx = arr->count + idx;
                     
                     if (idx < 0 || idx >= arr->count) {
-                        vm_error(vm, "Array index out of bounds: %d (size: %d)", idx, arr->count);
+                        if (vm_runtime_exception(vm, get_index_error_class(), 
+                                "Array index out of bounds: %d (size: %d)", idx, arr->count)) {
+                            ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                            while (vm->frame_count > handler->frame_index + 1) vm->frame_count--;
+                            vm->reg_top = handler->reg_top;
+                            frame = &vm->frames[vm->frame_count - 1];
+                            frame->ip = handler->handler_ip;
+                            break;
+                        }
                         return NULL_VAL;
                     }
                     
@@ -833,14 +915,29 @@ static Value vm_run_frame(VM* vm) {
                     if (idx < 0) idx = str->char_count + idx;
                     
                     if (idx < 0 || idx >= str->char_count) {
-                        vm_error(vm, "String index out of bounds: %d (length: %d)", idx, str->char_count);
+                        if (vm_runtime_exception(vm, get_index_error_class(),
+                                "String index out of bounds: %d (length: %d)", idx, str->char_count)) {
+                            ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                            while (vm->frame_count > handler->frame_index + 1) vm->frame_count--;
+                            vm->reg_top = handler->reg_top;
+                            frame = &vm->frames[vm->frame_count - 1];
+                            frame->ip = handler->handler_ip;
+                            break;
+                        }
                         return NULL_VAL;
                     }
                     
                     ObjString* ch = string_char_at(str, idx);
                     REG(dst) = OBJ_VAL(ch);
                 } else {
-                    vm_error(vm, "Can only index arrays and strings");
+                    if (vm_runtime_exception(vm, get_type_error_class(), "Can only index arrays and strings")) {
+                        ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                        while (vm->frame_count > handler->frame_index + 1) vm->frame_count--;
+                        vm->reg_top = handler->reg_top;
+                        frame = &vm->frames[vm->frame_count - 1];
+                        frame->ip = handler->handler_ip;
+                        break;
+                    }
                     return NULL_VAL;
                 }
                 break;
@@ -914,6 +1011,119 @@ static Value vm_run_frame(VM* vm) {
                     vm_error(vm, "Can only iterate over arrays and strings");
                     return NULL_VAL;
                 }
+                break;
+            }
+            
+            case OP_TRY_BEGIN: {
+                /* Push exception handler */
+                uint16_t offset = READ_BYTE();
+                offset |= (READ_BYTE() << 8);
+                
+                if (vm->exception_handler_count >= ZEX_MAX_EXCEPTION_HANDLERS) {
+                    vm_error(vm, "Too many nested exception handlers");
+                    return NULL_VAL;
+                }
+                
+                ExceptionHandler* handler = &vm->exception_handlers[vm->exception_handler_count++];
+                handler->handler_ip = frame->ip + offset;
+                handler->frame_index = vm->frame_count - 1;
+                handler->reg_top = vm->reg_top;
+                break;
+            }
+            
+            case OP_TRY_END: {
+                /* Pop exception handler (successful try completion) */
+                if (vm->exception_handler_count > 0) {
+                    vm->exception_handler_count--;
+                }
+                break;
+            }
+            
+            case OP_RAISE: {
+                uint8_t reg = READ_BYTE();
+                
+                if (reg == 0xFF) {
+                    /* Re-raise current exception */
+                    if (!vm->has_exception) {
+                        vm_error(vm, "No exception to re-raise");
+                        return NULL_VAL;
+                    }
+                } else {
+                    /* Raise exception from register */
+                    Value exc_val = REG(reg);
+                    if (!IS_EXCEPTION(exc_val)) {
+                        /* Wrap non-exception value in RuntimeError */
+                        ObjString* msg = value_to_string(exc_val);
+                        ObjException* exc = new_exception(get_runtime_error_class(), msg, 
+                            frame->function->chunk->lines[frame->ip - frame->function->chunk->code - 1],
+                            0, 0);
+                        vm->current_exception = OBJ_VAL(exc);
+                    } else {
+                        vm->current_exception = exc_val;
+                    }
+                    vm->has_exception = true;
+                }
+                
+                /* Unwind to nearest handler */
+                if (vm->exception_handler_count > 0) {
+                    ExceptionHandler* handler = &vm->exception_handlers[--vm->exception_handler_count];
+                    
+                    /* Unwind call stack if necessary */
+                    while (vm->frame_count > handler->frame_index + 1) {
+                        vm->frame_count--;
+                    }
+                    vm->reg_top = handler->reg_top;
+                    frame = &vm->frames[vm->frame_count - 1];
+                    frame->ip = handler->handler_ip;
+                } else {
+                    /* No handler - print exception and return error */
+                    ObjException* exc = AS_EXCEPTION(vm->current_exception);
+                    if (exc->exception_class && exc->exception_class->name) {
+                        zex_error(ERROR_RUNTIME, exc->line, exc->column, exc->span,
+                                  "%s: %s", exc->exception_class->name->chars,
+                                  exc->message ? exc->message->chars : "");
+                    } else {
+                        zex_error(ERROR_RUNTIME, exc->line, exc->column, exc->span,
+                                  "Exception: %s", exc->message ? exc->message->chars : "");
+                    }
+                    return NULL_VAL;
+                }
+                break;
+            }
+            
+            case OP_CHECK_EXC_TYPE: {
+                /* Check if current exception matches type */
+                uint8_t dst = READ_BYTE();
+                uint16_t idx = READ_BYTE();
+                idx |= (READ_BYTE() << 8);
+                
+                ObjString* type_name = AS_STRING(frame->function->chunk->constants[idx]);
+                
+                /* Look up exception class by name */
+                Value class_val;
+                bool found = table_get(&vm->globals, type_name, &class_val);
+                
+                bool matches = false;
+                if (found && class_val.obj && class_val.obj->type == OBJ_CLASS) {
+                    ObjClass* target_class = AS_CLASS(class_val);
+                    matches = exception_is_type(vm->current_exception, target_class);
+                }
+                
+                REG(dst) = BOOL_VAL(matches);
+                break;
+            }
+            
+            case OP_GET_EXCEPTION: {
+                /* Get current exception into register */
+                uint8_t reg = READ_BYTE();
+                REG(reg) = vm->current_exception;
+                break;
+            }
+            
+            case OP_CLEAR_EXCEPTION: {
+                /* Clear current exception (after handling) */
+                vm->has_exception = false;
+                vm->current_exception = NULL_VAL;
                 break;
             }
             

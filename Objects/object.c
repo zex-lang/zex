@@ -13,6 +13,7 @@
 #include "funcobject.h"
 #include "classobject.h"
 #include "arrayobject.h"
+#include "exceptionobject.h"
 #include "memory.h"
 
 /* Global object list for GC */
@@ -44,6 +45,7 @@ const char* obj_type_name(ObjType type) {
         case OBJ_NATIVE:        return "native";
         case OBJ_BOUND_METHOD:  return "bound_method";
         case OBJ_ARRAY:         return "array";
+        case OBJ_EXCEPTION:     return "exception";
         default:                return "unknown";
     }
 }
@@ -131,6 +133,16 @@ void print_value(Value value) {
             printf("]");
             break;
         }
+        case OBJ_EXCEPTION: {
+            ObjException* exc = AS_EXCEPTION(value);
+            if (exc->exception_class && exc->exception_class->name) {
+                printf("%s: %s", exc->exception_class->name->chars,
+                       exc->message ? exc->message->chars : "");
+            } else {
+                printf("Exception: %s", exc->message ? exc->message->chars : "");
+            }
+            break;
+        }
     }
 }
 
@@ -180,6 +192,18 @@ ObjString* value_to_string(Value value) {
             return new_string(buffer, len);
         case OBJ_BOUND_METHOD:
             return new_string_cstr("<bound method>");
+        case OBJ_EXCEPTION: {
+            ObjException* exc = AS_EXCEPTION(value);
+            if (exc->exception_class && exc->exception_class->name) {
+                len = snprintf(buffer, sizeof(buffer), "%s: %s",
+                              exc->exception_class->name->chars,
+                              exc->message ? exc->message->chars : "");
+            } else {
+                len = snprintf(buffer, sizeof(buffer), "Exception: %s",
+                              exc->message ? exc->message->chars : "");
+            }
+            return new_string(buffer, len);
+        }
         case OBJ_ARRAY: {
             ObjArray* arr = AS_ARRAY(value);
             if (arr->count == 0) return new_string_cstr("[]");
@@ -335,6 +359,11 @@ static void free_object(Obj* object) {
                 FREE_ARRAY(Value, arr->items, arr->capacity);
             }
             zex_free(object, sizeof(ObjArray));
+            break;
+        }
+        case OBJ_EXCEPTION: {
+            /* ObjException only stores pointers to other objects, no extra allocation */
+            zex_free(object, sizeof(ObjException));
             break;
         }
     }
