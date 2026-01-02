@@ -14,6 +14,7 @@
 #include "nullobject.h"
 #include "classobject.h"
 #include "arrayobject.h"
+#include <math.h>
 
 /* Forward declare vm_run_frame */
 static Value vm_run_frame(VM* vm);
@@ -329,6 +330,13 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
                 }
                 *result = INT_VAL(va / vb); 
                 return true;
+            case OP_MOD:
+                if (vb == 0) {
+                    vm_error(vm, "Modulo by zero");
+                    return false;
+                }
+                *result = INT_VAL(va % vb);
+                return true;
             case OP_EQ:  *result = BOOL_VAL(va == vb); return true;
             case OP_NE:  *result = BOOL_VAL(va != vb); return true;
             case OP_LT:  *result = BOOL_VAL(va < vb); return true;
@@ -362,6 +370,13 @@ static bool binary_op(VM* vm, OpCode op, Value a, Value b, Value* result) {
                     return false;
                 }
                 *result = FLOAT_VAL(va / vb); 
+                return true;
+            case OP_MOD:
+                if (vb == 0.0) {
+                    vm_error(vm, "Modulo by zero");
+                    return false;
+                }
+                *result = FLOAT_VAL(fmod(va, vb));
                 return true;
             case OP_EQ:  *result = BOOL_VAL(va == vb); return true;
             case OP_NE:  *result = BOOL_VAL(va != vb); return true;
@@ -496,6 +511,7 @@ static Value vm_run_frame(VM* vm) {
             case OP_SUB:
             case OP_MUL:
             case OP_DIV:
+            case OP_MOD:
             case OP_EQ:
             case OP_NE:
             case OP_LT:

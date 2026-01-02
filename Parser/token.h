@@ -22,6 +22,7 @@ typedef enum {
     TOKEN_MINUS,            /* - */
     TOKEN_STAR,             /* * */
     TOKEN_SLASH,            /* / */
+    TOKEN_PERCENT,          /* % */
     TOKEN_HASH,             /* # (comment) */
     TOKEN_SEMICOLON,        /* ; */
     
@@ -38,6 +39,7 @@ typedef enum {
     TOKEN_MINUS_EQUAL,      /* -= */
     TOKEN_STAR_EQUAL,       /* *= */
     TOKEN_SLASH_EQUAL,      /* /= */
+    TOKEN_PERCENT_EQUAL,    /* %= */
     TOKEN_AND_AND,          /* && */
     TOKEN_OR_OR,            /* || */
     

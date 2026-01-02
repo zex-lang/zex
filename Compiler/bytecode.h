@@ -46,6 +46,7 @@ typedef enum {
     OP_SUB,             /* Rdst = Ra - Rb */
     OP_MUL,             /* Rdst = Ra * Rb */
     OP_DIV,             /* Rdst = Ra / Rb */
+    OP_MOD,             /* Rdst = Ra % Rb */
     OP_NEG,             /* Rdst, R -- Rdst = -R */
     
     /* Comparison (all: Rdst, Ra, Rb) */

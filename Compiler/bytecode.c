@@ -35,6 +35,7 @@ const char* opcode_name(OpCode op) {
         case OP_SUB:            return "SUB";
         case OP_MUL:            return "MUL";
         case OP_DIV:            return "DIV";
+        case OP_MOD:            return "MOD";
         case OP_NEG:            return "NEG";
         case OP_EQ:             return "EQ";
         case OP_NE:             return "NE";
@@ -260,6 +261,8 @@ int chunk_disassemble_instruction(Chunk* chunk, int offset) {
             return three_register_instruction("MUL", chunk, offset);
         case OP_DIV:
             return three_register_instruction("DIV", chunk, offset);
+        case OP_MOD:
+            return three_register_instruction("MOD", chunk, offset);
         case OP_NEG:
             return two_register_instruction("NEG", chunk, offset);
         case OP_EQ:

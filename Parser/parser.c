@@ -382,6 +382,7 @@ static ASTNode* identifier(bool can_assign) {
         else if (match(TOKEN_MINUS_EQUAL)) { op = COMPOUND_SUB; is_compound = true; }
         else if (match(TOKEN_STAR_EQUAL))  { op = COMPOUND_MUL; is_compound = true; }
         else if (match(TOKEN_SLASH_EQUAL)) { op = COMPOUND_DIV; is_compound = true; }
+        else if (match(TOKEN_PERCENT_EQUAL)) { op = COMPOUND_MOD; is_compound = true; }
         
         if (is_compound) {
             ASTNode* value = expression();
@@ -409,6 +410,7 @@ static ASTNode* binary(ASTNode* left, bool can_assign) {
         case TOKEN_MINUS:         op = BINOP_SUB; break;
         case TOKEN_STAR:          op = BINOP_MUL; break;
         case TOKEN_SLASH:         op = BINOP_DIV; break;
+        case TOKEN_PERCENT:       op = BINOP_MOD; break;
         case TOKEN_EQUAL_EQUAL:   op = BINOP_EQ; break;
         case TOKEN_BANG_EQUAL:    op = BINOP_NE; break;
         case TOKEN_LESS:          op = BINOP_LT; break;
@@ -481,6 +483,7 @@ static ASTNode* dot(ASTNode* left, bool can_assign) {
         else if (match(TOKEN_MINUS_EQUAL)) { op = BINOP_SUB; is_compound = true; }
         else if (match(TOKEN_STAR_EQUAL))  { op = BINOP_MUL; is_compound = true; }
         else if (match(TOKEN_SLASH_EQUAL)) { op = BINOP_DIV; is_compound = true; }
+        else if (match(TOKEN_PERCENT_EQUAL)) { op = BINOP_MOD; is_compound = true; }
         
         if (is_compound) {
             ASTNode* value = expression();
@@ -527,6 +530,7 @@ static ParseRule rules[] = {
     [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
     [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
     [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
+    [TOKEN_PERCENT]       = {NULL,     binary, PREC_FACTOR},
     [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
     [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
     [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
@@ -539,6 +543,7 @@ static ParseRule rules[] = {
     [TOKEN_MINUS_EQUAL]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_STAR_EQUAL]    = {NULL,     NULL,   PREC_NONE},
     [TOKEN_SLASH_EQUAL]   = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_PERCENT_EQUAL] = {NULL,     NULL,   PREC_NONE},
     [TOKEN_AND_AND]       = {NULL,     binary, PREC_AND},
     [TOKEN_OR_OR]         = {NULL,     binary, PREC_OR},
     [TOKEN_IDENTIFIER]    = {identifier, NULL, PREC_NONE},

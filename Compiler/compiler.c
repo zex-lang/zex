@@ -253,6 +253,7 @@ static void compile_binary(ASTNode* node, int dest_reg) {
         case BINOP_SUB: op = OP_SUB; break;
         case BINOP_MUL: op = OP_MUL; break;
         case BINOP_DIV: op = OP_DIV; break;
+        case BINOP_MOD: op = OP_MOD; break;
         case BINOP_EQ:  op = OP_EQ; break;
         case BINOP_NE:  op = OP_NE; break;
         case BINOP_LT:  op = OP_LT; break;
@@ -655,6 +656,7 @@ static void compile_compound_assign(ASTNode* node) {
         case COMPOUND_SUB: op = OP_SUB; break;
         case COMPOUND_MUL: op = OP_MUL; break;
         case COMPOUND_DIV: op = OP_DIV; break;
+        case COMPOUND_MOD: op = OP_MOD; break;
     }
     
     emit_byte(op, node->line);
