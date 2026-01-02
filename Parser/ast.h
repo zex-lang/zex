@@ -29,6 +29,7 @@ typedef enum {
     AST_ARRAY,          /* [expr, expr, ...] */
     AST_INDEX_GET,      /* arr[index] */
     AST_INDEX_SET,      /* arr[index] = value */
+    AST_CLOSURE,        /* |params| body */
     
     /* Statements */
     AST_VAR_DECL,
@@ -274,6 +275,13 @@ struct ASTNode {
             int method_count;
         } class_decl;
         
+        /* AST_CLOSURE */
+        struct {
+            ParameterList params;
+            ASTNode* body;         /* Block or single expression */
+            bool is_expression;    /* true if body is single expression */
+        } closure;
+        
         /* AST_PROGRAM */
         struct {
             ASTNode** statements;
@@ -315,6 +323,7 @@ ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** 
 ASTNode* ast_new_array(ASTNode** elements, int count, int line, int column);
 ASTNode* ast_new_index_get(ASTNode* object, ASTNode* index, int line, int column);
 ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int line, int column);
+ASTNode* ast_new_closure(ParameterList params, ASTNode* body, bool is_expression, int line, int column);
 ASTNode* ast_new_program(ASTNode** statements, int count);
 
 /* Free AST */

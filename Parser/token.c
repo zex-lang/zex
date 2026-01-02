@@ -32,6 +32,7 @@ const char* token_type_name(TokenType type) {
         case TOKEN_SLASH_EQUAL:     return "/=";
         case TOKEN_AND_AND:         return "&&";
         case TOKEN_OR_OR:           return "||";
+        case TOKEN_PIPE:            return "|";
         case TOKEN_IDENTIFIER:      return "identifier";
         case TOKEN_STRING:          return "string";
         case TOKEN_INT:             return "integer";

@@ -233,6 +233,14 @@ ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int 
     return node;
 }
 
+ASTNode* ast_new_closure(ParameterList params, ASTNode* body, bool is_expression, int line, int column) {
+    ASTNode* node = alloc_node(AST_CLOSURE, line, column);
+    node->as.closure.params = params;
+    node->as.closure.body = body;
+    node->as.closure.is_expression = is_expression;
+    return node;
+}
+
 ASTNode* ast_new_program(ASTNode** statements, int count) {
     ASTNode* node = alloc_node(AST_PROGRAM, 1, 1);
     node->as.program.statements = statements;
@@ -398,6 +406,15 @@ void ast_free(ASTNode* node) {
                 ast_free(node->as.class_decl.methods[i]);
             }
             FREE_ARRAY(ASTNode*, node->as.class_decl.methods, node->as.class_decl.method_count);
+            break;
+            
+        case AST_CLOSURE:
+            for (int i = 0; i < node->as.closure.params.count; i++) {
+                zex_free(node->as.closure.params.names[i],
+                        strlen(node->as.closure.params.names[i]) + 1);
+            }
+            FREE_ARRAY(char*, node->as.closure.params.names, node->as.closure.params.capacity);
+            ast_free(node->as.closure.body);
             break;
             
         case AST_PROGRAM:
@@ -594,6 +611,11 @@ void ast_print(ASTNode* node, int indent) {
             for (int i = 0; i < node->as.class_decl.method_count; i++) {
                 ast_print(node->as.class_decl.methods[i], indent + 1);
             }
+            break;
+        case AST_CLOSURE:
+            printf("CLOSURE(params=%d, expr=%s)\n", node->as.closure.params.count,
+                   node->as.closure.is_expression ? "true" : "false");
+            ast_print(node->as.closure.body, indent + 1);
             break;
         case AST_PROGRAM:
             printf("PROGRAM(%d stmts)\n", node->as.program.count);

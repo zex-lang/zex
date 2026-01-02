@@ -246,7 +246,7 @@ Token lexer_scan_token(Lexer* lexer) {
             return error_token(lexer, "Expected '&&' for logical AND");
         case '|':
             if (match(lexer, '|')) return make_token(lexer, TOKEN_OR_OR);
-            return error_token(lexer, "Expected '||' for logical OR");
+            return make_token(lexer, TOKEN_PIPE);
         
         /* String literals */
         case '"': return string(lexer, '"');

@@ -44,6 +44,7 @@ static CompilerState* current = NULL;
 static void compile_node(ASTNode* node, int dest_reg);
 static void compile_expression(ASTNode* node, int dest_reg);
 static void compile_statement(ASTNode* node);
+static void compile_closure(ASTNode* node, int dest_reg);
 
 /*
  * Utility functions
@@ -543,6 +544,9 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             break;
         case AST_INDEX_SET:
             compile_index_set(node, dest_reg);
+            break;
+        case AST_CLOSURE:
+            compile_closure(node, dest_reg);
             break;
         default:
             zex_error(ERROR_COMPILE, node->line, 0, 0, "Unknown expression type: %d", node->type);
@@ -1119,6 +1123,61 @@ static void compile_return(ASTNode* node) {
     }
 }
 
+static void compile_closure(ASTNode* node, int dest_reg) {
+    ObjFunction* function = new_function();
+    function->name = NULL;  /* Anonymous function */
+    function->arity = node->as.closure.params.count;
+    function->chunk = ALLOCATE(Chunk, 1);
+    chunk_init(function->chunk);
+    
+    CompilerState compiler;
+    init_compiler(&compiler, function);
+    scope_begin(&current->scope);
+    
+    /* Parameters are local variables starting at reg 0 */
+    for (int i = 0; i < node->as.closure.params.count; i++) {
+        const char* param = node->as.closure.params.names[i];
+        scope_add_local(&current->scope, param, strlen(param));
+        current->next_reg++;
+    }
+    
+    /* Compile body */
+    if (node->as.closure.is_expression) {
+        /* Expression body - compile as implicit return */
+        int reg = alloc_reg();
+        compile_expression(node->as.closure.body, reg);
+        emit_bytes(OP_RETURN, reg, node->line);
+        free_reg(1);
+    } else {
+        /* Block body - compile statements with implicit return for last expr */
+        ASTNode* body = node->as.closure.body;
+        int count = body->as.block.count;
+        
+        for (int i = 0; i < count; i++) {
+            ASTNode* stmt = body->as.block.statements[i];
+            
+            /* Check if this is the last statement and it's an expression statement */
+            if (i == count - 1 && stmt->type == AST_EXPR_STMT) {
+                /* Implicit return: compile expression and return it */
+                int reg = alloc_reg();
+                compile_expression(stmt->as.expr_stmt.expression, reg);
+                emit_bytes(OP_RETURN, reg, stmt->line);
+                free_reg(1);
+            } else {
+                compile_node(stmt, 0);
+            }
+        }
+    }
+    
+    end_compiler();
+    
+    /* Emit closure instruction in enclosing function */
+    int idx = make_constant(OBJ_VAL(function));
+    emit_byte(OP_CLOSURE, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte16(idx, node->line);
+}
+
 static void compile_function(ASTNode* node, bool is_method) {
     ObjFunction* function = new_function();
     function->name = new_string_cstr(node->as.fun_decl.name);
@@ -1146,10 +1205,23 @@ static void compile_function(ASTNode* node, bool is_method) {
         current->next_reg++;
     }
     
-    /* Compile body */
+    /* Compile body with implicit return for last expression statement */
     ASTNode* body = node->as.fun_decl.body;
-    for (int i = 0; i < body->as.block.count; i++) {
-        compile_node(body->as.block.statements[i], 0);
+    int count = body->as.block.count;
+    
+    for (int i = 0; i < count; i++) {
+        ASTNode* stmt = body->as.block.statements[i];
+        
+        /* Check if this is the last statement and it's an expression statement */
+        if (i == count - 1 && stmt->type == AST_EXPR_STMT) {
+            /* Implicit return: compile expression and return it */
+            int reg = alloc_reg();
+            compile_expression(stmt->as.expr_stmt.expression, reg);
+            emit_bytes(OP_RETURN, reg, stmt->line);
+            free_reg(1);
+        } else {
+            compile_node(stmt, 0);
+        }
     }
     
     end_compiler();

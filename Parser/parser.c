@@ -16,6 +16,7 @@ static Parser* current_parser = NULL;
 static ASTNode* expression(void);
 static ASTNode* statement(void);
 static ASTNode* declaration(void);
+static ASTNode* block(void);
 
 /*
  * Token handling
@@ -516,6 +517,86 @@ static ASTNode* subscript(ASTNode* left, bool can_assign) {
     return ast_new_index_get(left, index, bracket_token.line, bracket_token.column);
 }
 
+static ASTNode* closure(bool can_assign) {
+    UNUSED(can_assign);
+    Token start = current_parser->previous;
+    
+    /* Parse parameter list between pipes: |a, b, c| */
+    ParameterList params = {NULL, 0, 0};
+    
+    skip_newlines();
+    
+    /* Check for empty params: || */
+    if (!check(TOKEN_PIPE)) {
+        do {
+            skip_newlines();
+            
+            if (!check(TOKEN_IDENTIFIER)) {
+                zex_error(ERROR_SYNTAX, current_parser->current.line,
+                          current_parser->current.column, current_parser->current.length,
+                          "Expected parameter name in closure");
+                current_parser->had_error = true;
+                current_parser->panic_mode = true;
+                break;
+            }
+            advance();
+            
+            if (params.count >= params.capacity) {
+                params.capacity = GROW_CAPACITY(params.capacity);
+                params.names = GROW_ARRAY(char*, params.names, params.count, params.capacity);
+            }
+            params.names[params.count++] = zex_strndup(current_parser->previous.start,
+                                                        current_parser->previous.length);
+            
+            skip_newlines();
+        } while (match(TOKEN_COMMA));
+    }
+    
+    consume(TOKEN_PIPE, "Expected '|' after closure parameters");
+    
+    skip_newlines();
+    
+    /* Parse body: block or expression */
+    ASTNode* body;
+    bool is_expression;
+    
+    if (match(TOKEN_LEFT_BRACE)) {
+        /* Block body: |x, y| { ... } */
+        body = block();
+        is_expression = false;
+    } else {
+        /* Expression body: |x, y| x + y */
+        body = expression();
+        is_expression = true;
+    }
+    
+    return ast_new_closure(params, body, is_expression, start.line, start.column);
+}
+
+static ASTNode* closure_empty(bool can_assign) {
+    /* || is zero-parameter closure */
+    UNUSED(can_assign);
+    Token start = current_parser->previous;
+    
+    ParameterList params = {NULL, 0, 0};
+    
+    skip_newlines();
+    
+    /* Parse body: block or expression */
+    ASTNode* body;
+    bool is_expression;
+    
+    if (match(TOKEN_LEFT_BRACE)) {
+        body = block();
+        is_expression = false;
+    } else {
+        body = expression();
+        is_expression = true;
+    }
+    
+    return ast_new_closure(params, body, is_expression, start.line, start.column);
+}
+
 /* Parse rules table */
 static ParseRule rules[] = {
     [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
@@ -545,7 +626,7 @@ static ParseRule rules[] = {
     [TOKEN_SLASH_EQUAL]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_PERCENT_EQUAL] = {NULL,     NULL,   PREC_NONE},
     [TOKEN_AND_AND]       = {NULL,     binary, PREC_AND},
-    [TOKEN_OR_OR]         = {NULL,     binary, PREC_OR},
+    [TOKEN_OR_OR]         = {closure_empty, binary, PREC_OR},
     [TOKEN_IDENTIFIER]    = {identifier, NULL, PREC_NONE},
     [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
     [TOKEN_INT]           = {number,   NULL,   PREC_NONE},
@@ -566,6 +647,7 @@ static ParseRule rules[] = {
     [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_HASH]          = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_PIPE]          = {closure,  NULL,   PREC_NONE},
 };
 
 static ParseRule* get_rule(TokenType type) {

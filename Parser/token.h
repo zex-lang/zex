@@ -42,6 +42,7 @@ typedef enum {
     TOKEN_PERCENT_EQUAL,    /* %= */
     TOKEN_AND_AND,          /* && */
     TOKEN_OR_OR,            /* || */
+    TOKEN_PIPE,             /* | */
     
     /* Literals */
     TOKEN_IDENTIFIER,
