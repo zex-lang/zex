@@ -292,6 +292,11 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
     }
 }
 
+/* Public API wrapper for call_value */
+bool vm_call_value(VM* vm, Value callee, int argc, Value* args, Value* result) {
+    return call_value(vm, callee, argc, args, result);
+}
+
 /* Get the class for any value (for method lookup) */
 static ObjClass* get_value_class(Value val) {
     if (IS_INSTANCE(val)) return ((ObjInstance*)val.obj)->obj.klass;

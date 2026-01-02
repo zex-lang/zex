@@ -67,6 +67,9 @@ void vm_define_native(VM* vm, const char* name, NativeFn function, int arity);
 /* Get the global VM instance */
 VM* vm_get(void);
 
+/* Call a value (function/closure) from native code */
+bool vm_call_value(VM* vm, Value callee, int argc, Value* args, Value* result);
+
 /* Report runtime error with stack trace */
 void vm_error(VM* vm, const char* format, ...);
 

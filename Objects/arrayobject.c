@@ -11,6 +11,7 @@
 #include "classobject.h"
 #include "funcobject.h"
 #include "memory.h"
+#include "vm.h"
 
 /* Array class singleton */
 static ObjClass* array_class = NULL;
@@ -234,6 +235,149 @@ static Value array_method_join(VM* vm, int argc, Value* args) {
     return OBJ_VAL(result);
 }
 
+/* arr.map(fn) -> new array with fn(item) for each item */
+static Value array_method_map(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    ObjArray* result = new_array_with_capacity(arr->count);
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value mapped;
+        if (!vm_call_value(vm, fn, 1, call_args, &mapped)) {
+            return NULL_VAL;
+        }
+        array_push(result, mapped);
+    }
+    
+    return OBJ_VAL(result);
+}
+
+/* arr.filter(fn) -> new array with items where fn(item) is truthy */
+static Value array_method_filter(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    ObjArray* result = new_array();
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value keep;
+        if (!vm_call_value(vm, fn, 1, call_args, &keep)) {
+            return NULL_VAL;
+        }
+        if (is_truthy(keep)) {
+            array_push(result, arr->items[i]);
+        }
+    }
+    
+    return OBJ_VAL(result);
+}
+
+/* arr.reduce(fn, initial) -> fn(acc, item) for each item */
+static Value array_method_reduce(VM* vm, int argc, Value* args) {
+    if (argc != 3) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    Value acc = args[2];
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[2] = { acc, arr->items[i] };
+        if (!vm_call_value(vm, fn, 2, call_args, &acc)) {
+            return NULL_VAL;
+        }
+    }
+    
+    return acc;
+}
+
+/* arr.forEach(fn) -> null, calls fn(item) for each item */
+static Value array_method_foreach(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+    }
+    
+    return NULL_VAL;
+}
+
+/* arr.find(fn) -> first item where fn(item) is truthy, or null */
+static Value array_method_find(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value found;
+        if (!vm_call_value(vm, fn, 1, call_args, &found)) {
+            return NULL_VAL;
+        }
+        if (is_truthy(found)) {
+            return arr->items[i];
+        }
+    }
+    
+    return NULL_VAL;
+}
+
+/* arr.some(fn) -> true if fn(item) is truthy for any item */
+static Value array_method_some(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+        if (is_truthy(result)) {
+            return BOOL_VAL(true);
+        }
+    }
+    
+    return BOOL_VAL(false);
+}
+
+/* arr.every(fn) -> true if fn(item) is truthy for all items */
+static Value array_method_every(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    
+    ObjArray* arr = AS_ARRAY(args[0]);
+    Value fn = args[1];
+    
+    for (int i = 0; i < arr->count; i++) {
+        Value call_args[1] = { arr->items[i] };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+        if (!is_truthy(result)) {
+            return BOOL_VAL(false);
+        }
+    }
+    
+    return BOOL_VAL(true);
+}
+
 /* Method registration table */
 typedef struct {
     const char* name;
@@ -252,6 +396,13 @@ static ArrayMethodDef array_methods[] = {
     {"clear",    array_method_clear,    1},
     {"reverse",  array_method_reverse,  1},
     {"join",     array_method_join,     2},
+    {"map",      array_method_map,      2},
+    {"filter",   array_method_filter,   2},
+    {"reduce",   array_method_reduce,   3},
+    {"forEach",  array_method_foreach,  2},
+    {"find",     array_method_find,     2},
+    {"some",     array_method_some,     2},
+    {"every",    array_method_every,    2},
     {NULL, NULL, 0}
 };
 

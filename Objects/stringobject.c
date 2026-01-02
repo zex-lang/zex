@@ -13,6 +13,7 @@
 #include "arrayobject.h"
 #include "memory.h"
 #include "utf8.h"
+#include "vm.h"
 
 /* String interning table */
 Table string_intern_table;
@@ -324,6 +325,214 @@ static Value string_replace(VM* vm, int argc, Value* args) {
     return OBJ_VAL(str);
 }
 
+/* str.forEach(fn) -> iterates over each character */
+static Value string_foreach(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+        
+        offset += char_len;
+    }
+    
+    return NULL_VAL;
+}
+
+/* str.map(fn) -> new string with mapped characters */
+static Value string_map(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int capacity = s->length; /* Initial guess */
+    int count = 0;
+    char* result = ALLOCATE(char, capacity + 1);
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value mapped;
+        if (!vm_call_value(vm, fn, 1, call_args, &mapped)) {
+            FREE_ARRAY(char, result, capacity + 1);
+            return NULL_VAL;
+        }
+        
+        if (IS_STRING(mapped)) {
+            ObjString* map_str = AS_STRING(mapped);
+            if (count + map_str->length > capacity) {
+                int old_capacity = capacity;
+                capacity = GROW_CAPACITY(capacity);
+                if (capacity < count + map_str->length) capacity = count + map_str->length + 16;
+                result = GROW_ARRAY(char, result, old_capacity + 1, capacity + 1);
+            }
+            memcpy(result + count, map_str->chars, map_str->length);
+            count += map_str->length;
+        }
+        
+        offset += char_len;
+    }
+    
+    result[count] = '\0';
+    ObjString* new_str = new_string(result, count);
+    FREE_ARRAY(char, result, capacity + 1);
+    
+    return OBJ_VAL(new_str);
+}
+
+/* str.filter(fn) -> new string with kept characters */
+static Value string_filter(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int capacity = s->length;
+    int count = 0;
+    char* result = ALLOCATE(char, capacity + 1);
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value keep;
+        if (!vm_call_value(vm, fn, 1, call_args, &keep)) {
+            FREE_ARRAY(char, result, capacity + 1);
+            return NULL_VAL;
+        }
+        
+        if (is_truthy(keep)) {
+            memcpy(result + count, s->chars + offset, char_len);
+            count += char_len;
+        }
+        
+        offset += char_len;
+    }
+    
+    result[count] = '\0';
+    ObjString* new_str = new_string(result, count);
+    FREE_ARRAY(char, result, capacity + 1);
+    
+    return OBJ_VAL(new_str);
+}
+
+/* str.reduce(fn, init) */
+static Value string_reduce(VM* vm, int argc, Value* args) {
+    if (argc != 3) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    Value acc = args[2];
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[2] = { acc, OBJ_VAL(ch) };
+        if (!vm_call_value(vm, fn, 2, call_args, &acc)) {
+            return NULL_VAL;
+        }
+        
+        offset += char_len;
+    }
+    
+    return acc;
+}
+
+/* str.find(fn) -> char string or null */
+static Value string_find(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value found;
+        if (!vm_call_value(vm, fn, 1, call_args, &found)) {
+            return NULL_VAL;
+        }
+        
+        if (is_truthy(found)) {
+            return OBJ_VAL(ch);
+        }
+        
+        offset += char_len;
+    }
+    
+    return NULL_VAL;
+}
+
+/* str.some(fn) -> bool */
+static Value string_some(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+        
+        if (is_truthy(result)) {
+            return BOOL_VAL(true);
+        }
+        
+        offset += char_len;
+    }
+    
+    return BOOL_VAL(false);
+}
+
+/* str.every(fn) -> bool */
+static Value string_every(VM* vm, int argc, Value* args) {
+    if (argc != 2) return NULL_VAL;
+    ObjString* s = AS_STRING(args[0]);
+    Value fn = args[1];
+    
+    int offset = 0;
+    while (offset < s->length) {
+        int char_len = utf8_char_len(s->chars + offset);
+        ObjString* ch = new_string(s->chars + offset, char_len);
+        
+        Value call_args[1] = { OBJ_VAL(ch) };
+        Value result;
+        if (!vm_call_value(vm, fn, 1, call_args, &result)) {
+            return NULL_VAL;
+        }
+        
+        if (!is_truthy(result)) {
+            return BOOL_VAL(false);
+        }
+        
+        offset += char_len;
+    }
+    
+    return BOOL_VAL(true);
+}
+
 /* Method registration table */
 typedef struct {
     const char* name;
@@ -334,8 +543,8 @@ typedef struct {
 static StringMethodDef string_methods[] = {
     {"len",         string_len,         1},
     {"bytes",       string_bytes,       1},
-    {"starts_with", string_starts_with, 2},
-    {"ends_with",   string_ends_with,   2},
+    {"startsWith", string_starts_with, 2},
+    {"endsWith",   string_ends_with,   2},
     {"contains",    string_contains,    2},
     {"upper",       string_upper,       1},
     {"lower",       string_lower,       1},
@@ -343,6 +552,13 @@ static StringMethodDef string_methods[] = {
     {"split",       string_split,       2},
     {"slice",       string_slice,       -1},
     {"replace",     string_replace,     3},
+    {"forEach",     string_foreach,     2},
+    {"map",         string_map,         2},
+    {"filter",      string_filter,      2},
+    {"reduce",      string_reduce,      3},
+    {"find",        string_find,        2},
+    {"some",        string_some,        2},
+    {"every",       string_every,       2},
     {NULL, NULL, 0}
 };
 

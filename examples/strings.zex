@@ -21,8 +21,8 @@ println("Bytes: " + s.bytes())
 # String methods
 println("Upper: " + s.upper())
 println("Lower: " + s.lower())
-println("Starts with 'Hello': " + s.starts_with("Hello"))
-println("Ends with '!': " + s.ends_with("!"))
+println("Starts with 'Hello': " + s.startsWith("Hello"))
+println("Ends with '!': " + s.endsWith("!"))
 println("Contains 'World': " + s.contains("World"))
 
 # Slicing

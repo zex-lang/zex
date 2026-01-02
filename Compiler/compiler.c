@@ -304,6 +304,10 @@ static void compile_unary(ASTNode* node, int dest_reg) {
     free_reg(1);
 }
 
+static void compile_closure(ASTNode* node, int dest_reg);
+static void compile_assign(ASTNode* node, int dest_reg);
+static void compile_compound_assign(ASTNode* node, int dest_reg);
+
 static void compile_call(ASTNode* node, int dest_reg) {
     /* Compile callee */
     int callee_reg = alloc_reg();
@@ -548,6 +552,12 @@ static void compile_expression(ASTNode* node, int dest_reg) {
         case AST_CLOSURE:
             compile_closure(node, dest_reg);
             break;
+        case AST_ASSIGN:
+            compile_assign(node, dest_reg);
+            break;
+        case AST_COMPOUND_ASSIGN:
+            compile_compound_assign(node, dest_reg);
+            break;
         default:
             zex_error(ERROR_COMPILE, node->line, 0, 0, "Unknown expression type: %d", node->type);
             current->had_error = true;
@@ -606,31 +616,31 @@ static void compile_var_decl(ASTNode* node) {
     }
 }
 
-static void compile_assign(ASTNode* node) {
+static void compile_assign(ASTNode* node, int dest_reg) {
     const char* name = node->as.assign.name;
     int len = strlen(name);
     
-    int val_reg = alloc_reg();
-    compile_expression(node->as.assign.value, val_reg);
+    /* Compile RHS directly into dest_reg */
+    compile_expression(node->as.assign.value, dest_reg);
     
     /* Check local first */
     int slot = scope_resolve_local(&current->scope, name, len);
     if (slot != -1) {
         emit_byte(OP_MOVE, node->line);
         emit_byte(slot, node->line);
-        emit_byte(val_reg, node->line);
+        emit_byte(dest_reg, node->line);
     } else {
         /* Global */
         int idx = identifier_constant(name);
         emit_byte(OP_SET_GLOBAL, node->line);
         emit_byte16(idx, node->line);
-        emit_byte(val_reg, node->line);
+        emit_byte(dest_reg, node->line);
     }
     
-    free_reg(1);
+    /* Result is already in dest_reg */
 }
 
-static void compile_compound_assign(ASTNode* node) {
+static void compile_compound_assign(ASTNode* node, int dest_reg) {
     const char* name = node->as.compound_assign.name;
     int len = strlen(name);
     
@@ -680,21 +690,19 @@ static void compile_compound_assign(ASTNode* node) {
         emit_byte(left_reg, node->line);
     }
     
+    /* Result */
+    if (dest_reg != left_reg) {
+        emit_byte(OP_MOVE, node->line);
+        emit_byte(dest_reg, node->line);
+        emit_byte(left_reg, node->line);
+    }
+    
     free_reg(2);
 }
 
 static void compile_expr_stmt(ASTNode* node) {
     ASTNode* expr = node->as.expr_stmt.expression;
     
-    /* Handle assignment statements that are wrapped as expressions */
-    if (expr->type == AST_ASSIGN) {
-        compile_assign(expr);
-        return;
-    }
-    if (expr->type == AST_COMPOUND_ASSIGN) {
-        compile_compound_assign(expr);
-        return;
-    }
     if (expr->type == AST_SET_COMPOUND) {
         int reg = alloc_reg();
         compile_set_compound(expr, reg);
@@ -1321,12 +1329,18 @@ static void compile_node(ASTNode* node, int dest_reg) {
         case AST_VAR_DECL:
             compile_var_decl(node);
             break;
-        case AST_ASSIGN:
-            compile_assign(node);
+        case AST_ASSIGN: {
+            int reg = alloc_reg();
+            compile_assign(node, reg);
+            free_reg(1);
             break;
-        case AST_COMPOUND_ASSIGN:
-            compile_compound_assign(node);
+        }
+        case AST_COMPOUND_ASSIGN: {
+            int reg = alloc_reg();
+            compile_compound_assign(node, reg);
+            free_reg(1);
             break;
+        }
         case AST_EXPR_STMT:
             compile_expr_stmt(node);
             break;

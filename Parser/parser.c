@@ -669,7 +669,30 @@ static ASTNode* parse_precedence(Precedence precedence) {
     bool can_assign = precedence <= PREC_ASSIGNMENT;
     ASTNode* left = prefix_rule(can_assign);
     
-    while (precedence <= get_rule(current_parser->current.type)->precedence) {
+    for (;;) {
+        /* Check current token for infix */
+        TokenType next = current_parser->current.type;
+        
+        /* Allow newlines before . [ ( */
+        if (next == TOKEN_NEWLINE) {
+            Token saved = current_parser->current;
+            Lexer saved_lexer = current_parser->lexer;
+            skip_newlines();
+            next = current_parser->current.type;
+            
+            /* Only continue if next is chaining operator (dot) */
+            if (next != TOKEN_DOT) {
+                current_parser->current = saved;
+                current_parser->lexer = saved_lexer;
+                break;
+            }
+        }
+        
+        ParseRule* rule = get_rule(next);
+        if (precedence > rule->precedence) {
+            break;
+        }
+        
         advance();
         InfixFn infix_rule = get_rule(current_parser->previous.type)->infix;
         left = infix_rule(left, can_assign);
