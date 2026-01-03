@@ -205,12 +205,22 @@ ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body,
     return node;
 }
 
-ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** methods, int method_count, int line, int column) {
+ASTNode* ast_new_class_decl(const char* name, char** superclasses, int superclass_count,
+                            ClassMember* members, int member_count, int line, int column) {
     ASTNode* node = alloc_node(AST_CLASS_DECL, line, column);
     node->as.class_decl.name = zex_strdup(name);
-    node->as.class_decl.superclass = superclass ? zex_strdup(superclass) : NULL;
-    node->as.class_decl.methods = methods;
-    node->as.class_decl.method_count = method_count;
+    node->as.class_decl.superclasses = superclasses;
+    node->as.class_decl.superclass_count = superclass_count;
+    node->as.class_decl.members = members;
+    node->as.class_decl.member_count = member_count;
+    return node;
+}
+
+ASTNode* ast_new_super(const char* method, ASTNode** arguments, int arg_count, int line, int column) {
+    ASTNode* node = alloc_node(AST_SUPER, line, column);
+    node->as.super_expr.method = method ? zex_strdup(method) : NULL;
+    node->as.super_expr.arguments = arguments;
+    node->as.super_expr.arg_count = arg_count;
     return node;
 }
 
@@ -420,24 +430,72 @@ void ast_free(ASTNode* node) {
             break;
             
         case AST_FUN_DECL:
-            zex_free(node->as.fun_decl.name, strlen(node->as.fun_decl.name) + 1);
-            for (int i = 0; i < node->as.fun_decl.params.count; i++) {
-                zex_free(node->as.fun_decl.params.names[i], 
-                        strlen(node->as.fun_decl.params.names[i]) + 1);
+            if (node->as.fun_decl.name) {
+                zex_free(node->as.fun_decl.name, strlen(node->as.fun_decl.name) + 1);
             }
-            FREE_ARRAY(char*, node->as.fun_decl.params.names, node->as.fun_decl.params.capacity);
+            if (node->as.fun_decl.params.names) {
+                for (int i = 0; i < node->as.fun_decl.params.count; i++) {
+                    zex_free(node->as.fun_decl.params.names[i], 
+                            strlen(node->as.fun_decl.params.names[i]) + 1);
+                }
+                FREE_ARRAY(char*, node->as.fun_decl.params.names, node->as.fun_decl.params.capacity);
+            }
             ast_free(node->as.fun_decl.body);
             break;
             
         case AST_CLASS_DECL:
             zex_free(node->as.class_decl.name, strlen(node->as.class_decl.name) + 1);
-            if (node->as.class_decl.superclass) {
-                zex_free(node->as.class_decl.superclass, strlen(node->as.class_decl.superclass) + 1);
+            /* Free superclasses */
+            for (int i = 0; i < node->as.class_decl.superclass_count; i++) {
+                zex_free(node->as.class_decl.superclasses[i], 
+                        strlen(node->as.class_decl.superclasses[i]) + 1);
             }
-            for (int i = 0; i < node->as.class_decl.method_count; i++) {
-                ast_free(node->as.class_decl.methods[i]);
+            if (node->as.class_decl.superclasses) {
+                FREE_ARRAY(char*, node->as.class_decl.superclasses, node->as.class_decl.superclass_count);
             }
-            FREE_ARRAY(ASTNode*, node->as.class_decl.methods, node->as.class_decl.method_count);
+            /* Free members (fields, methods, computed props) */
+            for (int i = 0; i < node->as.class_decl.member_count; i++) {
+                ClassMember* member = &node->as.class_decl.members[i];
+                zex_free(member->name, strlen(member->name) + 1);
+                switch (member->member_type) {
+                    case MEMBER_FIELD:
+                        if (member->as.field.initializer) {
+                            ast_free(member->as.field.initializer);
+                        }
+                        break;
+                    case MEMBER_METHOD:
+                        for (int j = 0; j < member->as.method.params.count; j++) {
+                            zex_free(member->as.method.params.names[j],
+                                    strlen(member->as.method.params.names[j]) + 1);
+                        }
+                        FREE_ARRAY(char*, member->as.method.params.names, member->as.method.params.capacity);
+                        ast_free(member->as.method.body);
+                        break;
+                    case MEMBER_COMPUTED_PROP:
+                        if (member->as.computed.getter) ast_free(member->as.computed.getter);
+                        if (member->as.computed.setter) ast_free(member->as.computed.setter);
+                        if (member->as.computed.setter_param) {
+                            zex_free(member->as.computed.setter_param, 
+                                    strlen(member->as.computed.setter_param) + 1);
+                        }
+                        break;
+                }
+            }
+            if (node->as.class_decl.members) {
+                FREE_ARRAY(ClassMember, node->as.class_decl.members, node->as.class_decl.member_count);
+            }
+            break;
+            
+        case AST_SUPER:
+            if (node->as.super_expr.method) {
+                zex_free(node->as.super_expr.method, strlen(node->as.super_expr.method) + 1);
+            }
+            for (int i = 0; i < node->as.super_expr.arg_count; i++) {
+                ast_free(node->as.super_expr.arguments[i]);
+            }
+            if (node->as.super_expr.arguments) {
+                FREE_ARRAY(ASTNode*, node->as.super_expr.arguments, node->as.super_expr.arg_count);
+            }
             break;
             
         case AST_CLOSURE:
@@ -671,13 +729,36 @@ void ast_print(ASTNode* node, int indent) {
             ast_print(node->as.fun_decl.body, indent + 1);
             break;
         case AST_CLASS_DECL:
-            if (node->as.class_decl.superclass) {
-                printf("CLASS(%s < %s)\n", node->as.class_decl.name, node->as.class_decl.superclass);
-            } else {
-                printf("CLASS(%s)\n", node->as.class_decl.name);
+            printf("CLASS(%s", node->as.class_decl.name);
+            if (node->as.class_decl.superclass_count > 0) {
+                printf(" < ");
+                for (int i = 0; i < node->as.class_decl.superclass_count; i++) {
+                    printf("%s", node->as.class_decl.superclasses[i]);
+                    if (i < node->as.class_decl.superclass_count - 1) printf(", ");
+                }
             }
-            for (int i = 0; i < node->as.class_decl.method_count; i++) {
-                ast_print(node->as.class_decl.methods[i], indent + 1);
+            printf(", members=%d)\n", node->as.class_decl.member_count);
+            for (int i = 0; i < node->as.class_decl.member_count; i++) {
+                ClassMember* m = &node->as.class_decl.members[i];
+                print_indent(indent + 1);
+                const char* vis = m->visibility == VISIBILITY_PUBLIC ? "public" :
+                                  m->visibility == VISIBILITY_PROTECTED ? "protected" : "private";
+                const char* statik = m->is_static ? "static " : "";
+                switch (m->member_type) {
+                    case MEMBER_FIELD:
+                        printf("%s %s%s (field)\n", vis, statik, m->name);
+                        break;
+                    case MEMBER_METHOD:
+                        printf("%s %s%s (method, params=%d%s)\n", vis, statik, m->name,
+                               m->as.method.params.count,
+                               m->as.method.is_constructor ? ", constructor" : "");
+                        break;
+                    case MEMBER_COMPUTED_PROP:
+                        printf("%s %s%s (computed, get=%s, set=%s)\n", vis, statik, m->name,
+                               m->as.computed.getter ? "yes" : "no",
+                               m->as.computed.setter ? "yes" : "no");
+                        break;
+                }
             }
             break;
         case AST_CLOSURE:
@@ -729,6 +810,16 @@ void ast_print(ASTNode* node, int indent) {
             printf("TUPLE [%d elements]\n", node->as.tuple.count);
             for (int i = 0; i < node->as.tuple.count; i++) {
                 ast_print(node->as.tuple.elements[i], indent + 1);
+            }
+            break;
+        case AST_SUPER:
+            if (node->as.super_expr.method) {
+                printf("SUPER.%s(args=%d)\n", node->as.super_expr.method, node->as.super_expr.arg_count);
+            } else {
+                printf("SUPER(args=%d)\n", node->as.super_expr.arg_count);
+            }
+            for (int i = 0; i < node->as.super_expr.arg_count; i++) {
+                ast_print(node->as.super_expr.arguments[i], indent + 1);
             }
             break;
     }

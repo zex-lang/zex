@@ -456,6 +456,39 @@ static void compile_self(ASTNode* node, int dest_reg) {
     }
 }
 
+static void compile_super(ASTNode* node, int dest_reg) {
+    if (!current->in_class) {
+        zex_error(ERROR_COMPILE, node->line, 0, 0, "Cannot use 'super' outside of a class");
+        current->had_error = true;
+        return;
+    }
+    
+    const char* method = node->as.super_expr.method;
+    int argc = node->as.super_expr.arg_count;
+    
+    /* Place self at dest_reg (self is in register 0 for methods) */
+    emit_byte(OP_MOVE, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte(0, node->line);  /* self from register 0 */
+    
+    /* Compile arguments into consecutive registers after dest_reg */
+    for (int i = 0; i < argc; i++) {
+        compile_expression(node->as.super_expr.arguments[i], dest_reg + 1 + i);
+    }
+    
+    /* Get method name - use special marker for super constructor */
+    /* If method is NULL (super()), use "__super_ctor__" which VM handles specially */
+    const char* method_name = method ? method : "__super_ctor__";
+    int method_idx = identifier_constant(method_name);
+    
+    /* Emit super invoke: OP_INVOKE_SUPER dest, method_idx16, argc */
+    /* self is at REG(dest), args are at REG(dest+1), REG(dest+2), ... */
+    emit_byte(OP_INVOKE_SUPER, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte16(method_idx, node->line);
+    emit_byte(argc + 1, node->line);  /* +1 for self */
+}
+
 static void compile_grouping(ASTNode* node, int dest_reg) {
     compile_expression(node->as.grouping.expression, dest_reg);
 }
@@ -603,6 +636,9 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             break;
         case AST_TUPLE:
             compile_tuple(node, dest_reg);
+            break;
+        case AST_SUPER:
+            compile_super(node, dest_reg);
             break;
         default:
             zex_error(ERROR_COMPILE, node->line, 0, 0, "Unknown expression type: %d", node->type);
@@ -1341,28 +1377,35 @@ static void compile_function(ASTNode* node, bool is_method) {
     ObjFunction* function = new_function();
     function->name = new_string_cstr(node->as.fun_decl.name);
     function->has_rest = node->as.fun_decl.params.has_rest;
-    /* Arity = required params (excluding rest param if present) */
-    function->arity = node->as.fun_decl.params.has_rest 
+    /* Arity = required params (excluding rest param if present)
+     * For methods, add 1 for implicit self */
+    int base_arity = node->as.fun_decl.params.has_rest 
         ? node->as.fun_decl.params.count - 1
         : node->as.fun_decl.params.count;
+    function->arity = is_method ? base_arity + 1 : base_arity;
     function->chunk = ALLOCATE(Chunk, 1);
     chunk_init(function->chunk);
     
     CompilerState compiler;
     init_compiler(&compiler, function);
+    
+    /* Propagate class context from parent for super calls etc */
+    if (is_method && compiler.enclosing != NULL) {
+        current->in_class = compiler.enclosing->in_class;
+        current->class_name = compiler.enclosing->class_name;
+    }
+    
     scope_begin(&current->scope);
     
-    /* Parameters are local variables starting at reg 0 (or 1 if method with self) */
-    int start_reg = 0;
-    if (is_method && node->as.fun_decl.params.count > 0 &&
-        strcmp(node->as.fun_decl.params.names[0], "self") == 0) {
-        /* 'self' is implicitly in R0 */
+    /* For methods, self is always implicitly in register 0 */
+    if (is_method) {
+        /* 'self' is implicitly in R0 - add to scope even though not in params */
         scope_add_local(&current->scope, "self", 4);
-        start_reg = 1;
         current->next_reg = 1;
     }
     
-    for (int i = (start_reg > 0 ? 1 : 0); i < node->as.fun_decl.params.count; i++) {
+    /* Other parameters follow after self (or from R0 if not a method) */
+    for (int i = 0; i < node->as.fun_decl.params.count; i++) {
         const char* param = node->as.fun_decl.params.names[i];
         scope_add_local(&current->scope, param, strlen(param));
         current->next_reg++;
@@ -1413,7 +1456,6 @@ static void compile_fun_decl(ASTNode* node) {
 
 static void compile_class_decl(ASTNode* node) {
     const char* name = node->as.class_decl.name;
-    const char* superclass = node->as.class_decl.superclass;
     int name_idx = identifier_constant(name);
     
     /* Create class object */
@@ -1422,8 +1464,9 @@ static void compile_class_decl(ASTNode* node) {
     emit_byte(class_reg, node->line);
     emit_byte16(name_idx, node->line);
     
-    /* Handle inheritance */
-    if (superclass != NULL) {
+    /* Handle inheritance (multiple parents - use first for now, C3 linearization TODO) */
+    if (node->as.class_decl.superclass_count > 0) {
+        const char* superclass = node->as.class_decl.superclasses[0];
         int super_idx = identifier_constant(superclass);
         int super_reg = alloc_reg();
         
@@ -1438,6 +1481,9 @@ static void compile_class_decl(ASTNode* node) {
         emit_byte(super_reg, node->line);
         
         free_reg(1);
+        
+        /* TODO: Handle additional parents for multiple inheritance */
+        /* For now, additional parents are ignored - needs C3 linearization */
     }
     
     /* Define global first so methods can reference the class */
@@ -1449,25 +1495,123 @@ static void compile_class_decl(ASTNode* node) {
     current->in_class = true;
     current->class_name = name;
     
-    for (int i = 0; i < node->as.class_decl.method_count; i++) {
-        ASTNode* method = node->as.class_decl.methods[i];
+    for (int i = 0; i < node->as.class_decl.member_count; i++) {
+        ClassMember* member = &node->as.class_decl.members[i];
         
-        compile_function(method, true);
-        
-        int method_idx = identifier_constant(method->as.fun_decl.name);
-        int method_reg = current->next_reg - 1;
-        
-        /* Add method to class */
-        emit_byte(OP_GET_GLOBAL, node->line);
-        emit_byte(class_reg, node->line);
-        emit_byte16(name_idx, node->line);
-        
-        emit_byte(OP_METHOD, node->line);
-        emit_byte(class_reg, node->line);
-        emit_byte16(method_idx, node->line);
-        emit_byte(method_reg, node->line);
-        
-        free_reg(1);
+        if (member->member_type == MEMBER_METHOD) {
+            /* Create a temporary fun_decl node for compile_function */
+            ASTNode temp_fun;
+            temp_fun.type = AST_FUN_DECL;
+            temp_fun.line = node->line;
+            temp_fun.column = node->column;
+            temp_fun.as.fun_decl.name = member->name;
+            temp_fun.as.fun_decl.params = member->as.method.params;
+            temp_fun.as.fun_decl.body = member->as.method.body;
+            
+            compile_function(&temp_fun, true);
+            
+            int method_idx = identifier_constant(member->name);
+            int method_reg = current->next_reg - 1;
+            
+            /* Add method to class */
+            emit_byte(OP_GET_GLOBAL, node->line);
+            emit_byte(class_reg, node->line);
+            emit_byte16(name_idx, node->line);
+            
+            emit_byte(OP_METHOD, node->line);
+            emit_byte(class_reg, node->line);
+            emit_byte16(method_idx, node->line);
+            emit_byte(method_reg, node->line);
+            
+            /* Store visibility info */
+            emit_byte(OP_SET_VISIBILITY, node->line);
+            emit_byte(class_reg, node->line);
+            emit_byte16(method_idx, node->line);
+            emit_byte((uint8_t)member->visibility, node->line);
+            
+            free_reg(1);
+        } else if (member->member_type == MEMBER_FIELD) {
+            /* Compile field initializer if present */
+            if (member->as.field.initializer != NULL) {
+                int val_reg = alloc_reg();
+                compile_expression(member->as.field.initializer, val_reg);
+                
+                int prop_idx = identifier_constant(member->name);
+                
+                if (member->is_static) {
+                    /* Static field: set on class's static_members table */
+                    emit_byte(OP_SET_STATIC, node->line);
+                    emit_byte(class_reg, node->line);
+                    emit_byte16(prop_idx, node->line);
+                    emit_byte(val_reg, node->line);
+                } else {
+                    /* Instance field: set default value on class */
+                    emit_byte(OP_SET_DEFAULT_PROP, node->line);
+                    emit_byte(class_reg, node->line);
+                    emit_byte16(prop_idx, node->line);
+                    emit_byte(val_reg, node->line);
+                }
+                
+                free_reg(1);
+            }
+            /* Fields without initializers don't need bytecode - they'll be undefined */
+        } else if (member->member_type == MEMBER_COMPUTED_PROP) {
+            /* Compile computed property getter and setter */
+            int prop_idx = identifier_constant(member->name);
+            
+            if (member->as.computed.getter != NULL) {
+                /* Create a synthetic function for getter: takes self, returns value */
+                ASTNode temp_fun;
+                temp_fun.type = AST_FUN_DECL;
+                temp_fun.line = node->line;
+                temp_fun.column = node->column;
+                temp_fun.as.fun_decl.name = member->name;
+                temp_fun.as.fun_decl.params.names = NULL;
+                temp_fun.as.fun_decl.params.count = 0;
+                temp_fun.as.fun_decl.params.has_rest = false;
+                temp_fun.as.fun_decl.body = member->as.computed.getter;
+                
+                compile_function(&temp_fun, true);  /* true = is_method (adds implicit self) */
+                
+                int getter_reg = current->next_reg - 1;
+                
+                emit_byte(OP_SET_GETTER, node->line);
+                emit_byte(class_reg, node->line);
+                emit_byte16(prop_idx, node->line);
+                emit_byte(getter_reg, node->line);
+                
+                free_reg(1);
+            }
+            
+            if (member->as.computed.setter != NULL) {
+                /* Create a synthetic function for setter: takes self and value */
+                ASTNode temp_fun;
+                temp_fun.type = AST_FUN_DECL;
+                temp_fun.line = node->line;
+                temp_fun.column = node->column;
+                temp_fun.as.fun_decl.name = member->name;
+                
+                /* Setter has one parameter: the value */
+                temp_fun.as.fun_decl.params.count = 1;
+                temp_fun.as.fun_decl.params.capacity = 1;
+                char* setter_param = member->as.computed.setter_param ? 
+                    member->as.computed.setter_param : "value";
+                temp_fun.as.fun_decl.params.names = &setter_param;
+                temp_fun.as.fun_decl.params.has_rest = false;
+                temp_fun.as.fun_decl.body = member->as.computed.setter;
+                
+                compile_function(&temp_fun, true);  /* true = is_method (adds implicit self) */
+                
+                int setter_reg = current->next_reg - 1;
+                
+                emit_byte(OP_SET_SETTER, node->line);
+                emit_byte(class_reg, node->line);
+                emit_byte16(prop_idx, node->line);
+                emit_byte(setter_reg, node->line);
+                
+                free_reg(1);
+            }
+        }
     }
     
     current->in_class = false;

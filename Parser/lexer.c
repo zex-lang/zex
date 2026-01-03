@@ -124,6 +124,7 @@ static TokenType identifier_type(Lexer* lexer) {
                 }
             }
             break;
+        case 'g': return check_keyword(lexer, 1, 2, "et", TOKEN_GET);
         case 'i':
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
@@ -133,6 +134,16 @@ static TokenType identifier_type(Lexer* lexer) {
             }
             break;
         case 'n': return check_keyword(lexer, 1, 3, "ull", TOKEN_NULL);
+        case 'o': return check_keyword(lexer, 1, 7, "verride", TOKEN_OVERRIDE);
+        case 'p':
+            if (lexer->current - lexer->start > 2) {
+                switch (lexer->start[2]) {
+                    case 'b': return check_keyword(lexer, 1, 5, "ublic", TOKEN_PUBLIC);
+                    case 'i': return check_keyword(lexer, 1, 6, "rivate", TOKEN_PRIVATE);
+                    case 'o': return check_keyword(lexer, 1, 8, "rotected", TOKEN_PROTECTED);
+                }
+            }
+            break;
         case 'r':
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
@@ -141,7 +152,19 @@ static TokenType identifier_type(Lexer* lexer) {
                 }
             }
             break;
-        case 's': return check_keyword(lexer, 1, 3, "elf", TOKEN_SELF);
+        case 's':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'e': 
+                        if (lexer->current - lexer->start == 3) {
+                            return check_keyword(lexer, 2, 1, "t", TOKEN_SET);
+                        }
+                        return check_keyword(lexer, 2, 2, "lf", TOKEN_SELF);
+                    case 't': return check_keyword(lexer, 2, 4, "atic", TOKEN_STATIC);
+                    case 'u': return check_keyword(lexer, 2, 3, "per", TOKEN_SUPER);
+                }
+            }
+            break;
         case 't':
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {

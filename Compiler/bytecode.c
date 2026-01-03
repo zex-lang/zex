@@ -57,6 +57,14 @@ const char* opcode_name(OpCode op) {
         case OP_METHOD:         return "METHOD";
         case OP_INVOKE:         return "INVOKE";
         case OP_INHERIT:        return "INHERIT";
+        case OP_GET_SUPER:      return "GET_SUPER";
+        case OP_INVOKE_SUPER:   return "INVOKE_SUPER";
+        case OP_SET_DEFAULT_PROP: return "SET_DEFAULT_PROP";
+        case OP_GET_STATIC:     return "GET_STATIC";
+        case OP_SET_STATIC:     return "SET_STATIC";
+        case OP_SET_GETTER:     return "SET_GETTER";
+        case OP_SET_SETTER:     return "SET_SETTER";
+        case OP_SET_VISIBILITY: return "SET_VISIBILITY";
         case OP_ARRAY:          return "ARRAY";
         case OP_INDEX_GET:      return "INDEX_GET";
         case OP_INDEX_SET:      return "INDEX_SET";
@@ -88,6 +96,9 @@ int opcode_operand_count(OpCode op) {
         case OP_RETURN:
         case OP_INHERIT:
             return 2;
+        
+        case OP_GET_SUPER:
+            return 3;  /* Rdst, idx16 */
             
         case OP_LOAD_CONST:
         case OP_GET_GLOBAL:
@@ -121,6 +132,25 @@ int opcode_operand_count(OpCode op) {
             
         case OP_INVOKE:
             return 5;
+        
+        case OP_INVOKE_SUPER:
+            return 4;  /* Rdst, idx16, argc */
+        
+        case OP_SET_DEFAULT_PROP:
+            return 4;  /* Rclass, idx16, Rval */
+        
+        case OP_GET_STATIC:
+            return 4;  /* Rdst, Rclass, idx16 */
+        
+        case OP_SET_STATIC:
+            return 4;  /* Rclass, idx16, Rval */
+        
+        case OP_SET_GETTER:
+        case OP_SET_SETTER:
+            return 4;  /* Rclass, idx16, Rfunc */
+        
+        case OP_SET_VISIBILITY:
+            return 4;  /* Rclass, idx16, vis */
         
         case OP_ARRAY:
             return 3;  /* Rdst, count, start_reg */

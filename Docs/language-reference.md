@@ -452,20 +452,23 @@ println(sum)  # 15
 
 ## Classes
 
-Classes are declared with the `class` keyword:
+Classes use visibility modifiers and modern constructor syntax:
 
 ```zex
 class Counter {
-    fun init(self, start, step) {
+    private count = 0
+    private step = 1
+    
+    public Counter(start, step) {
         self.count = start
         self.step = step
     }
     
-    fun increment(self) {
+    public increment() {
         self.count += self.step
     }
     
-    fun value(self) {
+    public value() {
         return self.count
     }
 }
@@ -479,22 +482,114 @@ println(c.value())  # 4
 
 ### Constructor
 
-The `init` method is the constructor. It receives `self` as the first parameter.
+The constructor is named after the class (like C++/Java). The `self` keyword is available implicitly within methods.
 
 ### The `self` Keyword
 
-All methods must explicitly declare `self` as their first parameter to access instance properties:
+Methods have implicit access to `self` - it is NOT passed as a parameter:
 
 ```zex
 class Person {
-    fun init(self, name) {
+    private name
+    
+    public Person(name) {
         self.name = name
     }
     
-    fun greet(self) {
+    public greet() {
         println("Hi, I'm " + self.name)
     }
 }
+```
+
+### Visibility Modifiers
+
+All class members require a visibility modifier:
+
+| Modifier | Access |
+|----------|--------|
+| `public` | Accessible from anywhere |
+| `private` | Only accessible within the class |
+| `protected` | Accessible within class and subclasses |
+
+```zex
+class Secret {
+    private secret = "hidden"
+    
+    private getSecret() {
+        return self.secret
+    }
+    
+    public reveal() {
+        return self.getSecret()  # OK - calling private from within
+    }
+}
+
+var s = Secret()
+println(s.reveal())     # OK: "hidden"
+# println(s.getSecret())  # ERROR: Cannot access private method
+```
+
+### Static Members
+
+Use `static` for class-level fields shared across all instances:
+
+```zex
+class Counter {
+    private static count = 0
+    
+    public Counter() {
+        Counter.count = Counter.count + 1
+    }
+    
+    public static getCount() {
+        return Counter.count
+    }
+}
+
+println(Counter.count)  # 0
+var c1 = Counter()
+println(Counter.count)  # 1
+var c2 = Counter()
+println(Counter.count)  # 2
+```
+
+### Computed Properties (Getters/Setters)
+
+Use `get` and `set` blocks for computed properties:
+
+```zex
+class Rectangle {
+    private _width = 0
+    private _height = 0
+    
+    public Rectangle(w, h) {
+        self._width = w
+        self._height = h
+    }
+    
+    public area {
+        get {
+            return self._width * self._height
+        }
+    }
+    
+    public width {
+        get {
+            return self._width
+        }
+        set(value) {
+            if value > 0 {
+                self._width = value
+            }
+        }
+    }
+}
+
+var rect = Rectangle(10, 5)
+println(rect.area)    # 50 (getter called automatically)
+rect.width = 20       # setter called
+println(rect.area)    # 100
 ```
 
 ---
@@ -505,28 +600,68 @@ Use Ruby-style syntax with `<` for inheritance:
 
 ```zex
 class Animal {
-    fun init(self, name) {
+    protected name
+    
+    public Animal(name) {
         self.name = name
     }
     
-    fun speak(self) {
+    public speak() {
         println("Some sound")
     }
 }
 
 class Dog < Animal {
-    fun speak(self) {
+    private breed
+    
+    public Dog(name, breed) {
+        super(name)            # Call parent constructor
+        self.breed = breed
+    }
+    
+    public override speak() {  # Override requires 'override' keyword
         println(self.name + " says: Woof!")
     }
     
-    fun fetch(self) {
+    public fetch() {
         println(self.name + " is fetching!")
     }
 }
 
-var dog = Dog("Rex")
+var dog = Dog("Rex", "Labrador")
 dog.speak()    # Rex says: Woof!
 dog.fetch()    # Rex is fetching!
+```
+
+### super()
+
+Use `super(args)` to call the parent constructor:
+
+```zex
+class Child < Parent {
+    public Child(a, b, c) {
+        super(a, b)  # Call Parent constructor
+        self.c = c
+    }
+}
+```
+
+### override
+
+The `override` keyword is required when overriding a parent method:
+
+```zex
+class Base {
+    public greet() {
+        println("Hello from Base")
+    }
+}
+
+class Derived < Base {
+    public override greet() {
+        println("Hello from Derived")
+    }
+}
 ```
 
 ---
@@ -620,18 +755,20 @@ Zex follows these naming conventions:
 ```zex
 # Class name: PascalCase
 class ShoppingCart {
-    fun init(self, ownerName) {
+    private ownerName
+    private itemCount = 0
+    
+    public ShoppingCart(ownerName) {
         self.ownerName = ownerName  # camelCase
-        self.itemCount = 0
     }
     
     # Method name: camelCase
-    fun addItem(self, itemName) {
+    public addItem(itemName) {
         self.itemCount += 1
         println("Added: " + itemName)
     }
     
-    fun getTotalItems(self) {
+    public getTotalItems() {
         return self.itemCount
     }
 }

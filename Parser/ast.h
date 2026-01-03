@@ -51,6 +51,7 @@ typedef enum {
     AST_TRY,
     AST_RAISE,
     AST_TUPLE,
+    AST_SUPER,          /* super.method() or super() */
 } ASTNodeType;
 
 /* Binary operators */
@@ -86,16 +87,62 @@ typedef enum {
     COMPOUND_MOD,   /* %= */
 } CompoundOp;
 
+/* Visibility modifiers for class members */
+typedef enum {
+    VISIBILITY_PRIVATE,     /* Default */
+    VISIBILITY_PUBLIC,
+    VISIBILITY_PROTECTED,
+} Visibility;
+
+/* Class member types */
+typedef enum {
+    MEMBER_FIELD,           /* Regular field declaration */
+    MEMBER_METHOD,          /* Method (including constructor) */
+    MEMBER_COMPUTED_PROP,   /* Computed property with get/set */
+} ClassMemberType;
+
 /* Forward declaration */
 typedef struct ASTNode ASTNode;
+typedef struct ClassMember ClassMember;
 
-/* Parameter list */
+/* Parameter list - defined early for use in ClassMember */
 typedef struct {
     char** names;
     int count;
     int capacity;
     bool has_rest;          /* True if last param is rest (..param) */
 } ParameterList;
+
+/* Class member: field, method, or computed property */
+struct ClassMember {
+    ClassMemberType member_type;
+    Visibility visibility;
+    bool is_static;
+    bool is_override;       /* For methods only */
+    char* name;             /* Member name */
+    
+    union {
+        /* MEMBER_FIELD */
+        struct {
+            ASTNode* initializer;   /* Can be NULL */
+        } field;
+        
+        /* MEMBER_METHOD */
+        struct {
+            ParameterList params;
+            ASTNode* body;          /* Block */
+            bool is_constructor;    /* True if name matches class name */
+        } method;
+        
+        /* MEMBER_COMPUTED_PROP */
+        struct {
+            ASTNode* getter;        /* Getter body, can be NULL */
+            ASTNode* setter;        /* Setter body, can be NULL */
+            char* setter_param;     /* Parameter name in setter */
+        } computed;
+    } as;
+};
+
 
 /* Except handler: except ExceptionType as var { body } */
 typedef struct {
@@ -293,10 +340,18 @@ struct ASTNode {
         /* AST_CLASS_DECL */
         struct {
             char* name;
-            char* superclass;      /* NULL if no inheritance */
-            ASTNode** methods;     /* function declarations */
-            int method_count;
+            char** superclasses;    /* Multiple inheritance parents, can be NULL */
+            int superclass_count;
+            ClassMember* members;   /* Unified list: fields, methods, computed props */
+            int member_count;
         } class_decl;
+        
+        /* AST_SUPER */
+        struct {
+            char* method;           /* Method name, NULL for super() constructor call */
+            ASTNode** arguments;
+            int arg_count;
+        } super_expr;
         
         /* AST_CLOSURE */
         struct {
@@ -356,7 +411,9 @@ ASTNode* ast_new_break(ASTNode* value, int line, int column);
 ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);
 ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body, int line, int column);
-ASTNode* ast_new_class_decl(const char* name, const char* superclass, ASTNode** methods, int method_count, int line, int column);
+ASTNode* ast_new_class_decl(const char* name, char** superclasses, int superclass_count,
+                            ClassMember* members, int member_count, int line, int column);
+ASTNode* ast_new_super(const char* method, ASTNode** arguments, int arg_count, int line, int column);
 ASTNode* ast_new_array(ASTNode** elements, int count, int line, int column);
 ASTNode* ast_new_index_get(ASTNode* object, ASTNode* index, int line, int column);
 ASTNode* ast_new_index_set(ASTNode* object, ASTNode* index, ASTNode* value, int line, int column);

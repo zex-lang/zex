@@ -305,6 +305,48 @@ static ASTNode* self_expr(bool can_assign) {
     return ast_new_self(token.line, token.column);
 }
 
+static ASTNode* super_expr(bool can_assign) {
+    UNUSED(can_assign);
+    Token token = current_parser->previous;
+    
+    char* method = NULL;
+    ASTNode** arguments = NULL;
+    int arg_count = 0;
+    int arg_capacity = 0;
+    
+    /* Check for super.method or super() */
+    if (match(TOKEN_DOT)) {
+        /* super.method() */
+        consume(TOKEN_IDENTIFIER, "Expected method name after 'super.'");
+        Token method_token = current_parser->previous;
+        method = zex_strndup(method_token.start, method_token.length);
+        
+        consume(TOKEN_LEFT_PAREN, "Expected '(' after super.method");
+    } else {
+        /* super() - constructor call */
+        consume(TOKEN_LEFT_PAREN, "Expected '(' or '.' after 'super'");
+    }
+    
+    /* Parse arguments */
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            skip_newlines();
+            ASTNode* arg = expression();
+            
+            if (arg_count >= arg_capacity) {
+                arg_capacity = GROW_CAPACITY(arg_capacity);
+                arguments = GROW_ARRAY(ASTNode*, arguments, arg_count, arg_capacity);
+            }
+            arguments[arg_count++] = arg;
+            skip_newlines();
+        } while (match(TOKEN_COMMA));
+    }
+    
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after super arguments");
+    
+    return ast_new_super(method, arguments, arg_count, token.line, token.column);
+}
+
 static ASTNode* grouping(bool can_assign) {
     UNUSED(can_assign);
     Token token = current_parser->previous;
@@ -775,6 +817,15 @@ static ParseRule rules[] = {
     [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_HASH]          = {NULL,     NULL,   PREC_NONE},
     [TOKEN_PIPE]          = {closure,  NULL,   PREC_NONE},
+    /* New OOP tokens */
+    [TOKEN_PUBLIC]        = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_PRIVATE]       = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_PROTECTED]     = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_STATIC]        = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_OVERRIDE]      = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_SUPER]         = {super_expr, NULL, PREC_NONE},
+    [TOKEN_GET]           = {NULL,     NULL,   PREC_NONE},
+    [TOKEN_SET]           = {NULL,     NULL,   PREC_NONE},
 };
 
 static ParseRule* get_rule(TokenType type) {
@@ -940,6 +991,185 @@ static ASTNode* fun_declaration(void) {
     return node;
 }
 
+/* Helper function to parse method parameters */
+static ParameterList parse_parameters(void) {
+    ParameterList params;
+    params.names = NULL;
+    params.count = 0;
+    params.capacity = 0;
+    params.has_rest = false;
+    
+    consume(TOKEN_LEFT_PAREN, "Expected '(' after method name");
+    
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            skip_newlines();
+            
+            /* Check for rest parameter */
+            bool is_rest = false;
+            if (match(TOKEN_DOT_DOT)) {
+                is_rest = true;
+                params.has_rest = true;
+            }
+            
+            /* self is implicit in methods - only accept regular identifiers */
+            if (!check(TOKEN_IDENTIFIER)) {
+                zex_error(ERROR_SYNTAX, current_parser->current.line,
+                          current_parser->current.column, current_parser->current.length,
+                          "Expected parameter name");
+                current_parser->had_error = true;
+                current_parser->panic_mode = true;
+                break;
+            }
+            advance();
+            Token param_token = current_parser->previous;
+            char* param_name = zex_strndup(param_token.start, param_token.length);
+            
+            if (params.count >= params.capacity) {
+                params.capacity = GROW_CAPACITY(params.capacity);
+                params.names = GROW_ARRAY(char*, params.names, params.count, params.capacity);
+            }
+            params.names[params.count++] = param_name;
+            
+            /* Rest parameter must be last */
+            if (is_rest) {
+                if (check(TOKEN_COMMA)) {
+                    zex_error(ERROR_SYNTAX, current_parser->current.line,
+                              current_parser->current.column, current_parser->current.length,
+                              "Rest parameter must be last");
+                    current_parser->had_error = true;
+                }
+                break;
+            }
+            skip_newlines();
+        } while (match(TOKEN_COMMA));
+    }
+    
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters");
+    return params;
+}
+
+/* Parse a class member: field, method, or computed property */
+static ClassMember parse_class_member(const char* class_name) {
+    ClassMember member;
+    member.visibility = VISIBILITY_PRIVATE;  /* Default is private */
+    member.is_static = false;
+    member.is_override = false;
+    member.name = NULL;
+    
+    /* Parse visibility modifier (required according to design) */
+    if (match(TOKEN_PUBLIC)) {
+        member.visibility = VISIBILITY_PUBLIC;
+    } else if (match(TOKEN_PRIVATE)) {
+        member.visibility = VISIBILITY_PRIVATE;
+    } else if (match(TOKEN_PROTECTED)) {
+        member.visibility = VISIBILITY_PROTECTED;
+    }
+    skip_newlines();
+    
+    /* Parse static modifier (optional) */
+    if (match(TOKEN_STATIC)) {
+        member.is_static = true;
+    }
+    skip_newlines();
+    
+    /* Parse override modifier (optional, only for methods) */
+    if (match(TOKEN_OVERRIDE)) {
+        member.is_override = true;
+    }
+    skip_newlines();
+    
+    /* Parse member name (identifier, get, or set) */
+    if (!check(TOKEN_IDENTIFIER) && !check(TOKEN_GET) && !check(TOKEN_SET)) {
+        zex_error(ERROR_SYNTAX, current_parser->current.line,
+                  current_parser->current.column, current_parser->current.length,
+                  "Expected member name");
+        current_parser->had_error = true;
+        current_parser->panic_mode = true;
+        member.member_type = MEMBER_FIELD;
+        member.as.field.initializer = NULL;
+        member.name = zex_strdup("__error__");
+        return member;
+    }
+    advance();
+    Token name_token = current_parser->previous;
+    member.name = zex_strndup(name_token.start, name_token.length);
+    
+    skip_newlines();
+    
+    /* Determine member type based on what follows:
+     * - '(' = method
+     * - '{' = computed property
+     * - '=' or newline/'}' = field
+     */
+    if (check(TOKEN_LEFT_PAREN)) {
+        /* This is a method: name(params) { body } - self is implicit */
+        member.member_type = MEMBER_METHOD;
+        member.as.method.is_constructor = (strcmp(member.name, class_name) == 0);
+        member.as.method.params = parse_parameters();
+        
+        skip_newlines();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' before method body");
+        member.as.method.body = block();
+        
+    } else if (check(TOKEN_LEFT_BRACE)) {
+        /* This is a computed property: name { get { } set { } } */
+        member.member_type = MEMBER_COMPUTED_PROP;
+        member.as.computed.getter = NULL;
+        member.as.computed.setter = NULL;
+        member.as.computed.setter_param = NULL;
+        
+        consume(TOKEN_LEFT_BRACE, "Expected '{' for computed property");
+        skip_newlines();
+        
+        while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+            skip_newlines();
+            
+            if (match(TOKEN_GET)) {
+                skip_newlines();
+                consume(TOKEN_LEFT_BRACE, "Expected '{' after 'get'");
+                member.as.computed.getter = block();
+            } else if (match(TOKEN_SET)) {
+                skip_newlines();
+                /* Optional parameter for setter */
+                if (match(TOKEN_LEFT_PAREN)) {
+                    consume(TOKEN_IDENTIFIER, "Expected parameter name in setter");
+                    Token setter_param = current_parser->previous;
+                    member.as.computed.setter_param = zex_strndup(setter_param.start, setter_param.length);
+                    consume(TOKEN_RIGHT_PAREN, "Expected ')' after setter parameter");
+                } else {
+                    /* Default setter parameter name is 'value' */
+                    member.as.computed.setter_param = zex_strdup("value");
+                }
+                skip_newlines();
+                consume(TOKEN_LEFT_BRACE, "Expected '{' after 'set'");
+                member.as.computed.setter = block();
+            } else if (check(TOKEN_NEWLINE)) {
+                advance();
+            } else if (!check(TOKEN_RIGHT_BRACE)) {
+                zex_error(ERROR_SYNTAX, current_parser->current.line,
+                          current_parser->current.column, current_parser->current.length,
+                          "Expected 'get' or 'set' in computed property");
+                current_parser->had_error = true;
+                synchronize();
+            }
+        }
+        
+        consume(TOKEN_RIGHT_BRACE, "Expected '}' after computed property");
+    } else {
+        /* This is a field: name or name = value */
+        member.member_type = MEMBER_FIELD;
+        member.as.field.initializer = NULL;
+        
+        /* Check for initializer */
+        if (match(TOKEN_EQUAL)) {
+            member.as.field.initializer = expression();
+        }
+    }
+    
+    return member;
+}
+
 static ASTNode* class_declaration(void) {
     Token class_token = current_parser->previous;
     consume(TOKEN_IDENTIFIER, "Expected class name after 'class'");
@@ -947,56 +1177,66 @@ static ASTNode* class_declaration(void) {
     Token name_token = current_parser->previous;
     char* name = zex_strndup(name_token.start, name_token.length);
     
-    /* Check for inheritance: class Child < Parent */
-    char* superclass = NULL;
+    /* Check for inheritance: class Child < Parent, OtherParent */
+    char** superclasses = NULL;
+    int superclass_count = 0;
+    int superclass_capacity = 0;
+    
     skip_newlines();
     if (match(TOKEN_LESS)) {
-        consume(TOKEN_IDENTIFIER, "Expected superclass name after '<'");
-        Token super_token = current_parser->previous;
-        superclass = zex_strndup(super_token.start, super_token.length);
-        skip_newlines();
+        do {
+            skip_newlines();
+            consume(TOKEN_IDENTIFIER, "Expected superclass name");
+            Token super_token = current_parser->previous;
+            char* superclass_name = zex_strndup(super_token.start, super_token.length);
+            
+            if (superclass_count >= superclass_capacity) {
+                superclass_capacity = GROW_CAPACITY(superclass_capacity);
+                superclasses = GROW_ARRAY(char*, superclasses, superclass_count, superclass_capacity);
+            }
+            superclasses[superclass_count++] = superclass_name;
+            skip_newlines();
+        } while (match(TOKEN_COMMA));
     }
     
     consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");
     skip_newlines();
     
-    /* Parse class body */
-    ASTNode** methods = NULL;
-    int method_count = 0;
-    int method_capacity = 0;
+    /* Parse class body members */
+    ClassMember* members = NULL;
+    int member_count = 0;
+    int member_capacity = 0;
     
     while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
         skip_newlines();
         
-        if (match(TOKEN_FUN)) {
-            /* Method */
-            ASTNode* method = fun_declaration();
-            
-            if (method_count >= method_capacity) {
-                method_capacity = GROW_CAPACITY(method_capacity);
-                methods = GROW_ARRAY(ASTNode*, methods, method_count, method_capacity);
-            }
-            methods[method_count++] = method;
-            
-        } else if (check(TOKEN_NEWLINE)) {
+        if (check(TOKEN_NEWLINE)) {
             advance();
-        } else if (!check(TOKEN_RIGHT_BRACE)) {
-            zex_error(ERROR_SYNTAX, current_parser->current.line,
-                      current_parser->current.column, current_parser->current.length,
-                      "Expected 'fun' in class body");
-            current_parser->had_error = true;
-            synchronize();
+            continue;
         }
+        
+        if (check(TOKEN_RIGHT_BRACE)) {
+            break;
+        }
+        
+        /* Parse a class member */
+        ClassMember member = parse_class_member(name);
+        
+        if (member_count >= member_capacity) {
+            member_capacity = GROW_CAPACITY(member_capacity);
+            members = GROW_ARRAY(ClassMember, members, member_count, member_capacity);
+        }
+        members[member_count++] = member;
+        
+        skip_newlines();
     }
     
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
     
-    ASTNode* node = ast_new_class_decl(name, superclass, methods, method_count,
+    ASTNode* node = ast_new_class_decl(name, superclasses, superclass_count,
+                                       members, member_count,
                                        class_token.line, class_token.column);
     zex_free(name, name_token.length + 1);
-    if (superclass) {
-        zex_free(superclass, strlen(superclass) + 1);
-    }
     return node;
 }
 

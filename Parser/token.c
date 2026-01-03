@@ -66,6 +66,14 @@ const char* token_type_name(TokenType type) {
         case TOKEN_FINALLY:         return "finally";
         case TOKEN_RAISE:           return "raise";
         case TOKEN_AS:              return "as";
+        case TOKEN_PUBLIC:          return "public";
+        case TOKEN_PRIVATE:         return "private";
+        case TOKEN_PROTECTED:       return "protected";
+        case TOKEN_STATIC:          return "static";
+        case TOKEN_OVERRIDE:        return "override";
+        case TOKEN_SUPER:           return "super";
+        case TOKEN_GET:             return "get";
+        case TOKEN_SET:             return "set";
         case TOKEN_NEWLINE:         return "newline";
         case TOKEN_EOF:             return "end of file";
         case TOKEN_ERROR:           return "error";

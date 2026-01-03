@@ -75,6 +75,14 @@ typedef enum {
     TOKEN_FINALLY,
     TOKEN_RAISE,
     TOKEN_AS,
+    TOKEN_PUBLIC,
+    TOKEN_PRIVATE,
+    TOKEN_PROTECTED,
+    TOKEN_STATIC,
+    TOKEN_OVERRIDE,
+    TOKEN_SUPER,
+    TOKEN_GET,
+    TOKEN_SET,
     
     /* Special */
     TOKEN_NEWLINE,

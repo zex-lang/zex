@@ -28,6 +28,35 @@ VM* vm_get(void) {
     return &global_vm;
 }
 
+/* Check if access to a member is allowed based on visibility
+ * visibility: 0=private, 1=public, 2=protected (must match Visibility enum)
+ * target_class: the class that owns the member
+ * calling_class: the class that is accessing the member (NULL if not in a class method)
+ * Returns: true if access is allowed
+ */
+static bool check_visibility(int visibility, ObjClass* target_class, ObjClass* calling_class) {
+    if (visibility == 1) {
+        /* Public: always allowed */
+        return true;
+    } else if (visibility == 0) {
+        /* Private: only from the same class */
+        /* If calling_class is NULL, we're outside any class - deny access */
+        return calling_class != NULL && calling_class == target_class;
+    } else if (visibility == 2) {
+        /* Protected: from same class or subclass */
+        if (calling_class == NULL) return false;  /* Must be in a class */
+        if (calling_class == target_class) return true;
+        /* Check if calling_class is a subclass of target_class */
+        ObjClass* klass = calling_class;
+        while (klass != NULL) {
+            if (klass == target_class) return true;
+            klass = klass->superclass;
+        }
+        return false;
+    }
+    return true;  /* Unknown visibility, allow */
+}
+
 void vm_error(VM* vm, const char* format, ...) {
     /* Push stack trace frames to error system */
     error_clear_frames();
@@ -323,16 +352,17 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
             ObjInstance* instance = new_instance(klass);
             *result = OBJ_VAL(instance);
             
-            Value init_val;
-            ObjString* init_name = new_string_cstr("init");
-            if (table_get(&klass->methods, init_name, &init_val)) {
+            /* Call constructor if it exists (constructor name = class name) */
+            Value ctor_val;
+            ObjString* ctor_name = klass->name;  /* Constructor has same name as class */
+            if (table_get(&klass->methods, ctor_name, &ctor_val)) {
                 Value new_args[256];
                 new_args[0] = OBJ_VAL(instance);
                 for (int i = 0; i < argc; i++) {
                     new_args[i + 1] = args[i];
                 }
-                ObjFunction* init_func = (ObjFunction*)init_val.obj;
-                if (!call_function(vm, init_func, argc + 1, new_args)) {
+                ObjFunction* ctor_func = (ObjFunction*)ctor_val.obj;
+                if (!call_function(vm, ctor_func, argc + 1, new_args)) {
                     return false;
                 }
                 vm_run_frame(vm);
@@ -800,6 +830,22 @@ static Value vm_run_frame(VM* vm) {
                 
                 if (IS_INSTANCE(obj_val)) {
                     ObjInstance* instance = (ObjInstance*)obj_val.obj;
+                    ObjClass* klass = instance->obj.klass;
+                    
+                    /* Check for computed property getter first */
+                    Value getter;
+                    if (table_get(&klass->getters, name, &getter)) {
+                        /* Call the getter with self as argument */
+                        ObjFunction* func = (ObjFunction*)getter.obj;
+                        REG(dst) = obj_val;  /* self in R0 */
+                        if (!call_function(vm, func, 1, &REG(dst))) {
+                            return NULL_VAL;
+                        }
+                        Value result = vm_run_frame(vm);
+                        frame = &vm->frames[vm->frame_count - 1];
+                        REG(dst) = result;
+                        break;
+                    }
                     
                     Value value;
                     if (table_get(&instance->properties, name, &value)) {
@@ -807,8 +853,19 @@ static Value vm_run_frame(VM* vm) {
                         break;
                     }
                     
-                    ObjClass* klass = instance->obj.klass;
                     if (table_get(&klass->methods, name, &value)) {
+                        /* Check visibility before binding */
+                        Value vis_val;
+                        if (table_get(&klass->member_visibility, name, &vis_val)) {
+                            int visibility = AS_INT(vis_val);
+                            /* Get calling class from current frame's function owner_class */
+                            ObjClass* calling_class = frame->function->owner_class;
+                            if (!check_visibility(visibility, klass, calling_class)) {
+                                const char* vis_name = visibility == 0 ? "private" : "protected";
+                                vm_error(vm, "Cannot access %s method '%s'", vis_name, name->chars);
+                                return NULL_VAL;
+                            }
+                        }
                         ObjBoundMethod* bound = new_bound_method(obj_val, value);
                         REG(dst) = OBJ_VAL(bound);
                         break;
@@ -820,11 +877,17 @@ static Value vm_run_frame(VM* vm) {
                 } else if (IS_CLASS(obj_val)) {
                     ObjClass* klass = (ObjClass*)obj_val.obj;
                     Value value;
+                    /* Check static_members first for static fields */
+                    if (table_get(&klass->static_members, name, &value)) {
+                        REG(dst) = value;
+                        break;
+                    }
+                    /* Then check methods for static method reference */
                     if (table_get(&klass->methods, name, &value)) {
                         REG(dst) = value;
                         break;
                     }
-                    vm_error(vm, "Undefined method '%s' on class", name->chars);
+                    vm_error(vm, "Undefined static member '%s' on class '%s'", name->chars, klass->name->chars);
                     return NULL_VAL;
                 } else if (IS_TUPLE(obj_val)) {
                     ObjTuple* tuple = AS_TUPLE(obj_val);
@@ -884,13 +947,36 @@ static Value vm_run_frame(VM* vm) {
                 uint8_t val_reg = READ_BYTE();
                 
                 Value obj_val = REG(obj_reg);
-                if (!IS_INSTANCE(obj_val)) {
-                    vm_error(vm, "Only instances have properties");
+                if (IS_INSTANCE(obj_val)) {
+                    ObjInstance* instance = (ObjInstance*)obj_val.obj;
+                    ObjClass* klass = instance->obj.klass;
+                    
+                    /* Check for computed property setter */
+                    Value setter;
+                    if (table_get(&klass->setters, name, &setter)) {
+                        /* Call the setter with self and value as arguments */
+                        ObjFunction* func = (ObjFunction*)setter.obj;
+                        /* We need to set up args: [self, value] */
+                        Value args[2];
+                        args[0] = obj_val;
+                        args[1] = REG(val_reg);
+                        if (!call_function(vm, func, 2, args)) {
+                            return NULL_VAL;
+                        }
+                        vm_run_frame(vm);
+                        frame = &vm->frames[vm->frame_count - 1];
+                        break;
+                    }
+                    
+                    table_set(&instance->properties, name, REG(val_reg));
+                } else if (IS_CLASS(obj_val)) {
+                    /* Setting property on class = set static member */
+                    ObjClass* klass = (ObjClass*)obj_val.obj;
+                    table_set(&klass->static_members, name, REG(val_reg));
+                } else {
+                    vm_error(vm, "Only instances and classes have properties");
                     return NULL_VAL;
                 }
-                
-                ObjInstance* instance = (ObjInstance*)obj_val.obj;
-                table_set(&instance->properties, name, REG(val_reg));
                 break;
             }
             
@@ -900,7 +986,15 @@ static Value vm_run_frame(VM* vm) {
                 uint8_t method_reg = READ_BYTE();
                 
                 ObjClass* klass = (ObjClass*)REG(class_reg).obj;
-                table_set(&klass->methods, name, REG(method_reg));
+                Value method_val = REG(method_reg);
+                
+                /* Set owner_class on the method function */
+                if (IS_FUNCTION(method_val)) {
+                    ObjFunction* func = AS_FUNCTION(method_val);
+                    func->owner_class = klass;
+                }
+                
+                table_set(&klass->methods, name, method_val);
                 break;
             }
             
@@ -976,6 +1070,148 @@ static Value vm_run_frame(VM* vm) {
                 
                 /* Set superclass pointer */
                 subclass->superclass = superclass;
+                break;
+            }
+            
+            case OP_GET_SUPER: {
+                uint8_t dst = READ_BYTE();
+                (void)READ_SHORT();  /* idx - not used yet */
+                
+                /* This should not be called directly - handled via OP_INVOKE_SUPER */
+                vm_error(vm, "OP_GET_SUPER not yet implemented");
+                REG(dst) = NULL_VAL;
+                break;
+            }
+            
+            case OP_INVOKE_SUPER: {
+                uint8_t dst = READ_BYTE();
+                ObjString* name = (ObjString*)READ_CONSTANT().obj;
+                uint8_t argc = READ_BYTE();
+                
+                /* Get self - should be at REG(dst) */
+                Value self = REG(dst);
+                if (!IS_INSTANCE(self)) {
+                    vm_error(vm, "Super can only be used on instances");
+                    return NULL_VAL;
+                }
+                
+                ObjInstance* instance = (ObjInstance*)self.obj;
+                ObjClass* klass = instance->obj.klass;
+                
+                /* Look up method in superclass */
+                if (klass->superclass == NULL) {
+                    vm_error(vm, "No superclass for super call");
+                    return NULL_VAL;
+                }
+                
+                /* Handle special marker __super_ctor__: call superclass constructor */
+                ObjString* method_name = name;
+                if (strcmp(name->chars, "__super_ctor__") == 0) {
+                    /* For super(), call superclass's constructor (same name as superclass) */
+                    method_name = klass->superclass->name;
+                }
+                
+                Value method_val;
+                if (!table_get(&klass->superclass->methods, method_name, &method_val)) {
+                    vm_error(vm, "Undefined method '%s' in superclass", method_name->chars);
+                    return NULL_VAL;
+                }
+                
+                /* Prepare args array - self + argc-1 additional args */
+                Value args[256];
+                args[0] = self;
+                for (int i = 1; i < argc; i++) {
+                    args[i] = REG(dst + i);
+                }
+                
+                /* Call the method */
+                ObjFunction* func = (ObjFunction*)method_val.obj;
+                if (!call_function(vm, func, argc, args)) {
+                    return NULL_VAL;
+                }
+                
+                Value result = vm_run_frame(vm);
+                frame = &vm->frames[vm->frame_count - 1];
+                REG(dst) = result;
+                break;
+            }
+            
+            case OP_SET_DEFAULT_PROP: {
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                uint8_t val_reg = READ_BYTE();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                /* Set default property on class */
+                table_set(&klass->default_properties, name, REG(val_reg));
+                break;
+            }
+            
+            case OP_GET_STATIC: {
+                uint8_t dst = READ_BYTE();
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                Value value;
+                if (!table_get(&klass->static_members, name, &value)) {
+                    vm_error(vm, "Undefined static member '%s'", name->chars);
+                    return NULL_VAL;
+                }
+                REG(dst) = value;
+                break;
+            }
+            
+            case OP_SET_STATIC: {
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                uint8_t val_reg = READ_BYTE();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                table_set(&klass->static_members, name, REG(val_reg));
+                break;
+            }
+            
+            case OP_SET_GETTER: {
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                uint8_t func_reg = READ_BYTE();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                table_set(&klass->getters, name, REG(func_reg));
+                break;
+            }
+            
+            case OP_SET_SETTER: {
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                uint8_t func_reg = READ_BYTE();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                table_set(&klass->setters, name, REG(func_reg));
+                break;
+            }
+            
+            case OP_SET_VISIBILITY: {
+                uint8_t class_reg = READ_BYTE();
+                uint16_t name_idx = READ_SHORT();
+                uint8_t visibility = READ_BYTE();
+                
+                ObjString* name = (ObjString*)frame->function->chunk->constants[name_idx].obj;
+                ObjClass* klass = (ObjClass*)REG(class_reg).obj;
+                
+                /* Store visibility as an integer value */
+                table_set(&klass->member_visibility, name, INT_VAL(visibility));
                 break;
             }
             

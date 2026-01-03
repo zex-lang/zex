@@ -1,38 +1,55 @@
 # Inheritance in Zex
-# Using Ruby-style syntax: class Child < Parent
+# New syntax: super() calls, override keyword, visibility modifiers
 
 class Animal {
-    fun init(self, name) {
+    protected name
+    
+    public Animal(name) {
         self.name = name
     }
     
-    fun speak(self) {
+    public speak() {
         println("Some sound")
     }
     
-    fun describe(self) {
+    public describe() {
         println("I am " + self.name)
     }
 }
 
 class Dog < Animal {
-    fun speak(self) {
+    private breed
+    
+    public Dog(name, breed) {
+        super(name)         # Call parent constructor
+        self.breed = breed
+    }
+    
+    public override speak() {
         println(self.name + " says: Woof!")
     }
     
-    fun fetch(self) {
+    public fetch() {
         println(self.name + " is fetching!")
+    }
+    
+    public getBreed() {
+        return self.breed
     }
 }
 
 class Cat < Animal {
-    fun speak(self) {
+    public Cat(name) {
+        super(name)
+    }
+    
+    public override speak() {
         println(self.name + " says: Meow!")
     }
 }
 
 # Dogs and Cats inherit from Animal
-var dog = Dog("Rex")
+var dog = Dog("Rex", "Labrador")
 var cat = Cat("Whiskers")
 
 # Inherited method from Animal
@@ -45,3 +62,4 @@ cat.speak()
 
 # Dog-specific method
 dog.fetch()
+println("Breed: " + dog.getBreed())

@@ -78,6 +78,14 @@ typedef enum {
     OP_METHOD,          /* Rclass, idx16 -- add method to class */
     OP_INVOKE,          /* Rdst, Robj, idx16, argc -- invoke method */
     OP_INHERIT,         /* Rsubclass, Rsuperclass -- inherit methods */
+    OP_GET_SUPER,       /* Rdst, idx16 -- get bound super method */
+    OP_INVOKE_SUPER,    /* Rdst, idx16, argc -- invoke super method with args */
+    OP_SET_DEFAULT_PROP, /* Rclass, idx16, Rval -- set default property on class */
+    OP_GET_STATIC,      /* Rdst, Rclass, idx16 -- get static member from class */
+    OP_SET_STATIC,      /* Rclass, idx16, Rval -- set static member on class */
+    OP_SET_GETTER,      /* Rclass, idx16, Rfunc -- set getter on class */
+    OP_SET_SETTER,      /* Rclass, idx16, Rfunc -- set setter on class */
+    OP_SET_VISIBILITY,  /* Rclass, idx16, vis -- set member visibility (0=pub,1=prot,2=priv) */
     
     /* Arrays */
     OP_ARRAY,           /* Rdst, count -- create array from count values on stack */

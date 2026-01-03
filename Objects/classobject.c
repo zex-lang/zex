@@ -13,7 +13,11 @@ ObjClass* new_class(ObjString* name) {
     klass->superclass = NULL;
     klass->init = NULL;
     table_init(&klass->methods);
+    table_init(&klass->static_members);
     table_init(&klass->default_properties);
+    table_init(&klass->getters);
+    table_init(&klass->setters);
+    table_init(&klass->member_visibility);
     return klass;
 }
 

@@ -14,8 +14,12 @@ struct ObjClass {
     Obj obj;
     ObjString* name;            /* Class name */
     struct ObjClass* superclass; /* Parent class (NULL if none) */
-    Table methods;              /* Method table */
+    Table methods;              /* Instance method table */
+    Table static_members;       /* Static fields and methods */
     Table default_properties;   /* Default property values */
+    Table getters;              /* Computed property getters */
+    Table setters;              /* Computed property setters */
+    Table member_visibility;    /* Visibility: 0=public, 1=protected, 2=private */
     ObjFunction* init;          /* Constructor (init method) */
 };
 

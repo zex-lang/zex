@@ -10,6 +10,7 @@
 
 /* Forward declarations */
 struct Chunk;
+struct ObjClass;
 
 /* Function object */
 struct ObjFunction {
@@ -19,6 +20,7 @@ struct ObjFunction {
     int upvalue_count;          /* Number of captured variables */
     struct Chunk* chunk;        /* Bytecode */
     ObjString* name;            /* Function name */
+    struct ObjClass* owner_class;  /* Class this method belongs to (NULL for functions) */
 };
 
 /* Create a new function */

@@ -14,6 +14,7 @@ ObjFunction* new_function(void) {
     function->upvalue_count = 0;
     function->name = NULL;
     function->chunk = NULL;
+    function->owner_class = NULL;
     return function;
 }
 
