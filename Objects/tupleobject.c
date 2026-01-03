@@ -92,15 +92,16 @@ typedef struct {
     const char* name;
     NativeFn function;
     int arity;
+    bool has_rest;
 } TupleMethodDef;
 
 static TupleMethodDef tuple_methods[] = {
-    {"len",      tuple_method_len,      1},
-    {"first",    tuple_method_first,    1},
-    {"last",     tuple_method_last,     1},
-    {"contains", tuple_method_contains, 2},
-    {"empty",    tuple_method_empty,    1},
-    {NULL, NULL, 0}
+    {"len",      tuple_method_len,      1, false},
+    {"first",    tuple_method_first,    1, false},
+    {"last",     tuple_method_last,     1, false},
+    {"contains", tuple_method_contains, 2, false},
+    {"empty",    tuple_method_empty,    1, false},
+    {NULL, NULL, 0, false}
 };
 
 ObjClass* get_tuple_class(void) {
@@ -111,7 +112,7 @@ void init_tuple_class(void) {
     tuple_class = new_class(new_string_cstr("tuple"));
     
     for (TupleMethodDef* def = tuple_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, false, def->name);
+        ObjNative* native = new_native(def->function, def->arity, def->has_rest, def->name);
         table_set(&tuple_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

@@ -539,29 +539,30 @@ static Value string_every(VM* vm, int argc, Value* args) {
 typedef struct {
     const char* name;
     NativeFn function;
-    int arity;  /* Including self; -1 = variadic */
+    int arity;
+    bool has_rest;
 } StringMethodDef;
 
 static StringMethodDef string_methods[] = {
-    {"len",         string_len,         1},
-    {"bytes",       string_bytes,       1},
-    {"startsWith", string_starts_with, 2},
-    {"endsWith",   string_ends_with,   2},
-    {"contains",    string_contains,    2},
-    {"upper",       string_upper,       1},
-    {"lower",       string_lower,       1},
-    {"trim",        string_trim,        1},
-    {"split",       string_split,       2},
-    {"slice",       string_slice,       -1},
-    {"replace",     string_replace,     3},
-    {"forEach",     string_foreach,     2},
-    {"map",         string_map,         2},
-    {"filter",      string_filter,      2},
-    {"reduce",      string_reduce,      3},
-    {"find",        string_find,        2},
-    {"some",        string_some,        2},
-    {"every",       string_every,       2},
-    {NULL, NULL, 0}
+    {"len",        string_len,         1, false},
+    {"bytes",      string_bytes,       1, false},
+    {"startsWith", string_starts_with, 2, false},
+    {"endsWith",   string_ends_with,   2, false},
+    {"contains",   string_contains,    2, false},
+    {"upper",      string_upper,       1, false},
+    {"lower",      string_lower,       1, false},
+    {"trim",       string_trim,        1, false},
+    {"split",      string_split,       2, false},
+    {"slice",      string_slice,       2, true},  /* arity=2 (self, start), has_rest for optional end */
+    {"replace",    string_replace,     3, false},
+    {"forEach",    string_foreach,     2, false},
+    {"map",        string_map,         2, false},
+    {"filter",     string_filter,      2, false},
+    {"reduce",     string_reduce,      3, false},
+    {"find",       string_find,        2, false},
+    {"some",       string_some,        2, false},
+    {"every",      string_every,       2, false},
+    {NULL, NULL, 0, false}
 };
 
 ObjClass* get_string_class(void) {
@@ -573,7 +574,7 @@ void init_string_class(void) {
     
     /* Register all string methods */
     for (StringMethodDef* def = string_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, false, def->name);
+        ObjNative* native = new_native(def->function, def->arity, def->has_rest, def->name);
         table_set(&string_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

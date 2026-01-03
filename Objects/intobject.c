@@ -31,11 +31,12 @@ typedef struct {
     const char* name;
     NativeFn function;
     int arity;
+    bool has_rest;
 } IntMethodDef;
 
 static IntMethodDef int_methods[] = {
-    {"abs", int_abs, 1},
-    {NULL, NULL, 0}
+    {"abs", int_abs, 1, false},
+    {NULL, NULL, 0, false}
 };
 
 ObjClass* get_int_class(void) {
@@ -47,7 +48,7 @@ void init_int_class(void) {
     
     /* Register all int methods */
     for (IntMethodDef* def = int_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, false, def->name);
+        ObjNative* native = new_native(def->function, def->arity, def->has_rest, def->name);
         table_set(&int_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

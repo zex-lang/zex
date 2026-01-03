@@ -53,14 +53,15 @@ typedef struct {
     const char* name;
     NativeFn function;
     int arity;
+    bool has_rest;
 } FloatMethodDef;
 
 static FloatMethodDef float_methods[] = {
-    {"abs",   float_abs,   1},
-    {"floor", float_floor, 1},
-    {"ceil",  float_ceil,  1},
-    {"round", float_round, 1},
-    {NULL, NULL, 0}
+    {"abs",   float_abs,   1, false},
+    {"floor", float_floor, 1, false},
+    {"ceil",  float_ceil,  1, false},
+    {"round", float_round, 1, false},
+    {NULL, NULL, 0, false}
 };
 
 ObjClass* get_float_class(void) {
@@ -72,7 +73,7 @@ void init_float_class(void) {
     
     /* Register all float methods */
     for (FloatMethodDef* def = float_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, false, def->name);
+        ObjNative* native = new_native(def->function, def->arity, def->has_rest, def->name);
         table_set(&float_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

@@ -382,28 +382,29 @@ static Value array_method_every(VM* vm, int argc, Value* args) {
 typedef struct {
     const char* name;
     NativeFn function;
-    int arity;  /* Including self; -1 = variadic */
+    int arity;
+    bool has_rest;
 } ArrayMethodDef;
 
 static ArrayMethodDef array_methods[] = {
-    {"len",      array_method_len,      1},
-    {"push",     array_method_push,     2},
-    {"pop",      array_method_pop,      1},
-    {"first",    array_method_first,    1},
-    {"last",     array_method_last,     1},
-    {"contains", array_method_contains, 2},
-    {"empty",    array_method_empty,    1},
-    {"clear",    array_method_clear,    1},
-    {"reverse",  array_method_reverse,  1},
-    {"join",     array_method_join,     2},
-    {"map",      array_method_map,      2},
-    {"filter",   array_method_filter,   2},
-    {"reduce",   array_method_reduce,   3},
-    {"forEach",  array_method_foreach,  2},
-    {"find",     array_method_find,     2},
-    {"some",     array_method_some,     2},
-    {"every",    array_method_every,    2},
-    {NULL, NULL, 0}
+    {"len",      array_method_len,      1, false},
+    {"push",     array_method_push,     2, false},
+    {"pop",      array_method_pop,      1, false},
+    {"first",    array_method_first,    1, false},
+    {"last",     array_method_last,     1, false},
+    {"contains", array_method_contains, 2, false},
+    {"empty",    array_method_empty,    1, false},
+    {"clear",    array_method_clear,    1, false},
+    {"reverse",  array_method_reverse,  1, false},
+    {"join",     array_method_join,     2, false},
+    {"map",      array_method_map,      2, false},
+    {"filter",   array_method_filter,   2, false},
+    {"reduce",   array_method_reduce,   3, false},
+    {"forEach",  array_method_foreach,  2, false},
+    {"find",     array_method_find,     2, false},
+    {"some",     array_method_some,     2, false},
+    {"every",    array_method_every,    2, false},
+    {NULL, NULL, 0, false}
 };
 
 ObjClass* get_array_class(void) {
@@ -415,7 +416,7 @@ void init_array_class(void) {
     
     /* Register all array methods as native functions in the class methods table */
     for (ArrayMethodDef* def = array_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, false, def->name);
+        ObjNative* native = new_native(def->function, def->arity, def->has_rest, def->name);
         table_set(&array_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }
