@@ -86,15 +86,15 @@ static char* read_file(const char* path) {
 
 static char* get_default_output(const char* input_path) {
     size_t len = strlen(input_path);
-    char* out = malloc(len + 2);
+    /* Need space for: path + ".zexc" + null = len + 6 at most */
+    char* out = malloc(len + 6);
     strcpy(out, input_path);
     
     /* Replace .zex with .zexc or append .zexc */
     if (len > 4 && strcmp(input_path + len - 4, ".zex") == 0) {
-        out[len - 4] = '\0';
-        strcat(out, ".zexc");
+        strcpy(out + len - 4, ".zexc");
     } else {
-        strcat(out, ".zexc");
+        strcpy(out + len, ".zexc");
     }
     return out;
 }

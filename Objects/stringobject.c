@@ -161,9 +161,10 @@ static Value string_contains(VM* vm, int argc, Value* args) {
 static Value string_upper(VM* vm, int argc, Value* args) {
     (void)vm; (void)argc;
     ObjString* s = AS_STRING(args[0]);
-    char* result = ALLOCATE(char, s->length + 1);
+    int len = s->length;
+    char* result = ALLOCATE(char, len + 1);
     
-    for (int i = 0; i < s->length; i++) {
+    for (int i = 0; i < len; i++) {
         char c = s->chars[i];
         if (c >= 'a' && c <= 'z') {
             result[i] = c - 32;
@@ -171,19 +172,20 @@ static Value string_upper(VM* vm, int argc, Value* args) {
             result[i] = c;
         }
     }
-    result[s->length] = '\0';
+    result[len] = '\0';
     
-    ObjString* str = new_string(result, s->length);
-    FREE_ARRAY(char, result, s->length + 1);
+    ObjString* str = new_string(result, len);
+    FREE_ARRAY(char, result, len + 1);
     return OBJ_VAL(str);
 }
 
 static Value string_lower(VM* vm, int argc, Value* args) {
     (void)vm; (void)argc;
     ObjString* s = AS_STRING(args[0]);
-    char* result = ALLOCATE(char, s->length + 1);
+    int len = s->length;
+    char* result = ALLOCATE(char, len + 1);
     
-    for (int i = 0; i < s->length; i++) {
+    for (int i = 0; i < len; i++) {
         char c = s->chars[i];
         if (c >= 'A' && c <= 'Z') {
             result[i] = c + 32;
@@ -191,10 +193,10 @@ static Value string_lower(VM* vm, int argc, Value* args) {
             result[i] = c;
         }
     }
-    result[s->length] = '\0';
+    result[len] = '\0';
     
-    ObjString* str = new_string(result, s->length);
-    FREE_ARRAY(char, result, s->length + 1);
+    ObjString* str = new_string(result, len);
+    FREE_ARRAY(char, result, len + 1);
     return OBJ_VAL(str);
 }
 
