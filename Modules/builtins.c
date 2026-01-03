@@ -5,6 +5,7 @@
 
 #include "builtins.h"
 #include "error.h"
+#include "memory.h"
 #include "object.h"
 #include "stringobject.h"
 #include "nullobject.h"
@@ -19,6 +20,53 @@ static Value builtin_println(VM* vm, int argc, Value* args) {
     }
     printf("\n");
     return NULL_VAL;
+}
+
+static Value builtin_print(VM* vm, int argc, Value* args) {
+    UNUSED(vm);
+    for (int i = 0; i < argc; i++) {
+        if (i > 0) printf(" ");
+        print_value(args[i]);
+    }
+    fflush(stdout);
+    return NULL_VAL;
+}
+
+static Value builtin_input(VM* vm, int argc, Value* args) {
+    UNUSED(vm);
+    
+    /* Optional prompt */
+    if (argc > 0) {
+        print_value(args[0]);
+        fflush(stdout);
+    }
+    
+    /* Dynamic buffer for reading input */
+    size_t capacity = 256;
+    size_t len = 0;
+    char* buffer = zex_alloc(capacity);
+    
+    int c;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+        if (len + 1 >= capacity) {
+            size_t old_capacity = capacity;
+            capacity *= 2;
+            buffer = zex_realloc(buffer, old_capacity, capacity);
+        }
+        buffer[len++] = (char)c;
+    }
+    
+    /* Handle \r\n (Windows line endings) */
+    if (len > 0 && buffer[len - 1] == '\r') {
+        len--;
+    }
+    
+    buffer[len] = '\0';
+    
+    ObjString* result = new_string(buffer, len);
+    zex_free(buffer, capacity);
+    
+    return OBJ_VAL(result);
 }
 
 static Value builtin_type(VM* vm, int argc, Value* args) {
@@ -50,6 +98,8 @@ typedef struct {
 
 static BuiltinDef builtins[] = {
     {"println", builtin_println, 0, true},
+    {"print",   builtin_print,   0, true},
+    {"input",   builtin_input,   0, true},
     {"type",    builtin_type,    1, false},
     {NULL, NULL, 0, false}
 };
