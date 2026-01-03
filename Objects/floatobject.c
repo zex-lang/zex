@@ -72,7 +72,7 @@ void init_float_class(void) {
     
     /* Register all float methods */
     for (FloatMethodDef* def = float_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, def->name);
+        ObjNative* native = new_native(def->function, def->arity, false, def->name);
         table_set(&float_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

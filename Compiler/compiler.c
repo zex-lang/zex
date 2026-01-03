@@ -315,16 +315,39 @@ static void compile_call(ASTNode* node, int dest_reg) {
     
     /* Compile arguments */
     int arg_base = current->next_reg;
+    bool has_spread = false;
+    uint32_t spread_mask = 0;
+    
     for (int i = 0; i < node->as.call.arg_count; i++) {
         int arg_reg = alloc_reg();
         compile_expression(node->as.call.arguments[i], arg_reg);
+        
+        /* Check if this argument is spread */
+        if (node->as.call.is_spread && node->as.call.is_spread[i]) {
+            has_spread = true;
+            if (i < 32) {
+                spread_mask |= (1u << i);
+            }
+        }
     }
     
-    /* Emit call */
-    emit_byte(OP_CALL, node->line);
-    emit_byte(callee_reg, node->line);
-    emit_byte(node->as.call.arg_count, node->line);
-    emit_byte(arg_base, node->line);
+    /* Emit call - use spread version if needed */
+    if (has_spread) {
+        emit_byte(OP_CALL_SPREAD, node->line);
+        emit_byte(callee_reg, node->line);
+        emit_byte(node->as.call.arg_count, node->line);
+        emit_byte(arg_base, node->line);
+        /* Emit spread mask as 4 bytes (supports up to 32 args) */
+        emit_byte(spread_mask & 0xFF, node->line);
+        emit_byte((spread_mask >> 8) & 0xFF, node->line);
+        emit_byte((spread_mask >> 16) & 0xFF, node->line);
+        emit_byte((spread_mask >> 24) & 0xFF, node->line);
+    } else {
+        emit_byte(OP_CALL, node->line);
+        emit_byte(callee_reg, node->line);
+        emit_byte(node->as.call.arg_count, node->line);
+        emit_byte(arg_base, node->line);
+    }
     
     /* Move result to dest */
     if (dest_reg != callee_reg) {
@@ -1259,7 +1282,11 @@ static void compile_return(ASTNode* node) {
 static void compile_closure(ASTNode* node, int dest_reg) {
     ObjFunction* function = new_function();
     function->name = NULL;  /* Anonymous function */
-    function->arity = node->as.closure.params.count;
+    function->has_rest = node->as.closure.params.has_rest;
+    /* Arity = required params (excluding rest param if present) */
+    function->arity = node->as.closure.params.has_rest 
+        ? node->as.closure.params.count - 1
+        : node->as.closure.params.count;
     function->chunk = ALLOCATE(Chunk, 1);
     chunk_init(function->chunk);
     
@@ -1313,7 +1340,11 @@ static void compile_closure(ASTNode* node, int dest_reg) {
 static void compile_function(ASTNode* node, bool is_method) {
     ObjFunction* function = new_function();
     function->name = new_string_cstr(node->as.fun_decl.name);
-    function->arity = node->as.fun_decl.params.count;
+    function->has_rest = node->as.fun_decl.params.has_rest;
+    /* Arity = required params (excluding rest param if present) */
+    function->arity = node->as.fun_decl.params.has_rest 
+        ? node->as.fun_decl.params.count - 1
+        : node->as.fun_decl.params.count;
     function->chunk = ALLOCATE(Chunk, 1);
     chunk_init(function->chunk);
     

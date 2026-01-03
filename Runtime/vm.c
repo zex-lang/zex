@@ -157,9 +157,9 @@ void vm_free(VM* vm) {
     vm->reg_top = 0;
 }
 
-void vm_define_native(VM* vm, const char* name, NativeFn function, int arity) {
+void vm_define_native(VM* vm, const char* name, NativeFn function, int arity, bool has_rest) {
     ObjString* name_str = new_string_cstr(name);
-    ObjNative* native = new_native(function, arity, name);
+    ObjNative* native = new_native(function, arity, has_rest, name);
     table_set(&vm->globals, name_str, OBJ_VAL(native));
 }
 
@@ -167,9 +167,19 @@ void vm_define_native(VM* vm, const char* name, NativeFn function, int arity) {
 #define FRAME_SLOTS 32
 
 static bool call_function(VM* vm, ObjFunction* function, int argc, Value* args) {
-    if (argc != function->arity) {
-        vm_error(vm, "Expected %d arguments but got %d", function->arity, argc);
-        return false;
+    /* Check arity */
+    if (function->has_rest) {
+        /* For variadic: need at least 'arity' args */
+        if (argc < function->arity) {
+            vm_error(vm, "Expected at least %d arguments but got %d", function->arity, argc);
+            return false;
+        }
+    } else {
+        /* For non-variadic: need exactly 'arity' args */
+        if (argc != function->arity) {
+            vm_error(vm, "Expected %d arguments but got %d", function->arity, argc);
+            return false;
+        }
     }
     
     if (vm->frame_count >= ZEX_MAX_FRAMES) {
@@ -193,9 +203,17 @@ static bool call_function(VM* vm, ObjFunction* function, int argc, Value* args) 
     
     vm->reg_top = reg_offset + FRAME_SLOTS;
     
-    /* Copy arguments to new frame's registers */
-    for (int i = 0; i < argc; i++) {
+    /* Copy required arguments to new frame's registers */
+    for (int i = 0; i < function->arity; i++) {
         frame->registers[i] = args[i];
+    }
+    
+    /* If has rest parameter, collect remaining args into tuple */
+    if (function->has_rest) {
+        int rest_count = argc - function->arity;
+        ObjTuple* rest_tuple = new_tuple(&args[function->arity], rest_count);
+        /* Rest tuple goes in the next register after required params */
+        frame->registers[function->arity] = OBJ_VAL(rest_tuple);
     }
     
     return true;
@@ -219,10 +237,19 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
         
         case OBJ_NATIVE: {
             ObjNative* native = (ObjNative*)callee.obj;
-            if (native->arity >= 0 && argc != native->arity) {
-                vm_error(vm, "Expected %d arguments but got %d", 
-                                native->arity, argc);
-                return false;
+            /* Check arity: if has_rest, need at least arity args; otherwise exactly arity */
+            if (native->has_rest) {
+                if (argc < native->arity) {
+                    vm_error(vm, "Expected at least %d arguments but got %d", 
+                                    native->arity, argc);
+                    return false;
+                }
+            } else {
+                if (argc != native->arity) {
+                    vm_error(vm, "Expected %d arguments but got %d", 
+                                    native->arity, argc);
+                    return false;
+                }
             }
             *result = native->function(vm, argc, args);
             return true;
@@ -323,10 +350,19 @@ static bool call_value(VM* vm, Value callee, int argc, Value* args, Value* resul
             
             if (IS_NATIVE(bound->method)) {
                 ObjNative* native = AS_NATIVE(bound->method);
-                if (native->arity >= 0 && (argc + 1) != native->arity) {
-                    vm_error(vm, "Expected %d arguments but got %d", 
-                                    native->arity, argc + 1);
-                    return false;
+                int total_args = argc + 1;  /* Include self */
+                if (native->has_rest) {
+                    if (total_args < native->arity) {
+                        vm_error(vm, "Expected at least %d arguments but got %d", 
+                                        native->arity, total_args);
+                        return false;
+                    }
+                } else {
+                    if (total_args != native->arity) {
+                        vm_error(vm, "Expected %d arguments but got %d", 
+                                        native->arity, total_args);
+                        return false;
+                    }
                 }
                 *result = native->function(vm, argc + 1, new_args);
                 return true;
@@ -671,6 +707,56 @@ static Value vm_run_frame(VM* vm) {
                 
                 Value result;
                 if (!call_value(vm, callee, argc, args, &result)) {
+                    return NULL_VAL;
+                }
+                
+                frame = &vm->frames[vm->frame_count - 1];
+                REG(callee_reg) = result;
+                break;
+            }
+            
+            case OP_CALL_SPREAD: {
+                uint8_t callee_reg = READ_BYTE();
+                uint8_t argc = READ_BYTE();
+                uint8_t arg_base = READ_BYTE();
+                uint32_t spread_mask = READ_BYTE();
+                spread_mask |= ((uint32_t)READ_BYTE() << 8);
+                spread_mask |= ((uint32_t)READ_BYTE() << 16);
+                spread_mask |= ((uint32_t)READ_BYTE() << 24);
+                
+                Value callee = REG(callee_reg);
+                
+                /* Expand spread arguments into final args array */
+                Value args[256];
+                int final_argc = 0;
+                
+                for (int i = 0; i < argc && final_argc < 256; i++) {
+                    Value arg = REG(arg_base + i);
+                    bool is_spread = (spread_mask & (1u << i)) != 0;
+                    
+                    if (is_spread) {
+                        /* Expand tuple or array */
+                        if (IS_TUPLE(arg)) {
+                            ObjTuple* tuple = AS_TUPLE(arg);
+                            for (int j = 0; j < tuple->count && final_argc < 256; j++) {
+                                args[final_argc++] = tuple->items[j];
+                            }
+                        } else if (IS_ARRAY(arg)) {
+                            ObjArray* arr = AS_ARRAY(arg);
+                            for (int j = 0; j < arr->count && final_argc < 256; j++) {
+                                args[final_argc++] = arr->items[j];
+                            }
+                        } else {
+                            vm_error(vm, "Can only spread tuples and arrays");
+                            return NULL_VAL;
+                        }
+                    } else {
+                        args[final_argc++] = arg;
+                    }
+                }
+                
+                Value result;
+                if (!call_value(vm, callee, final_argc, args, &result)) {
                     return NULL_VAL;
                 }
                 
@@ -1048,8 +1134,19 @@ static Value vm_run_frame(VM* vm) {
                         REG(val_reg) = OBJ_VAL(ch);
                         REG(idx_reg) = INT_VAL(idx + 1);
                     }
+                } else if (IS_TUPLE(arr_val)) {
+                    ObjTuple* tuple = AS_TUPLE(arr_val);
+                    
+                    if (idx >= tuple->count) {
+                        /* Done iterating, jump to end */
+                        frame->ip += jump_offset;
+                    } else {
+                        /* Get current item and increment index */
+                        REG(val_reg) = tuple->items[idx];
+                        REG(idx_reg) = INT_VAL(idx + 1);
+                    }
                 } else {
-                    vm_error(vm, "Can only iterate over arrays and strings");
+                    vm_error(vm, "Can only iterate over arrays, strings, and tuples");
                     return NULL_VAL;
                 }
                 break;

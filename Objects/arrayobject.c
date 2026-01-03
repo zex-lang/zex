@@ -415,7 +415,7 @@ void init_array_class(void) {
     
     /* Register all array methods as native functions in the class methods table */
     for (ArrayMethodDef* def = array_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, def->name);
+        ObjNative* native = new_native(def->function, def->arity, false, def->name);
         table_set(&array_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

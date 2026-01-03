@@ -481,6 +481,7 @@ static ASTNode* call(ASTNode* callee, bool can_assign) {
     
     /* Parse arguments */
     ASTNode** args = NULL;
+    bool* is_spread = NULL;
     int arg_count = 0;
     int arg_capacity = 0;
     
@@ -491,9 +492,21 @@ static ASTNode* call(ASTNode* callee, bool can_assign) {
             skip_newlines();
             
             if (arg_count >= arg_capacity) {
+                int old_capacity = arg_capacity;
                 arg_capacity = GROW_CAPACITY(arg_capacity);
                 args = GROW_ARRAY(ASTNode*, args, arg_count, arg_capacity);
+                is_spread = GROW_ARRAY(bool, is_spread, old_capacity, arg_capacity);
+                /* Initialize new slots to false */
+                for (int i = old_capacity; i < arg_capacity; i++) {
+                    is_spread[i] = false;
+                }
             }
+            
+            /* Check for spread operator */
+            if (match(TOKEN_DOT_DOT)) {
+                is_spread[arg_count] = true;
+            }
+            
             args[arg_count++] = expression();
             
             skip_newlines();
@@ -503,7 +516,7 @@ static ASTNode* call(ASTNode* callee, bool can_assign) {
     skip_newlines();
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments");
     
-    return ast_new_call(callee, args, arg_count, paren.line, paren.column);
+    return ast_new_call(callee, args, is_spread, arg_count, paren.line, paren.column);
 }
 
 static ASTNode* dot(ASTNode* left, bool can_assign) {
@@ -628,7 +641,7 @@ static ASTNode* closure(bool can_assign) {
     Token start = current_parser->previous;
     
     /* Parse parameter list between pipes: |a, b, c| */
-    ParameterList params = {NULL, 0, 0};
+    ParameterList params = {NULL, 0, 0, false};
     
     skip_newlines();
     
@@ -636,6 +649,9 @@ static ASTNode* closure(bool can_assign) {
     if (!check(TOKEN_PIPE)) {
         do {
             skip_newlines();
+            
+            /* Check for rest parameter (..param) */
+            bool is_rest = match(TOKEN_DOT_DOT);
             
             if (!check(TOKEN_IDENTIFIER)) {
                 zex_error(ERROR_SYNTAX, current_parser->current.line,
@@ -653,6 +669,11 @@ static ASTNode* closure(bool can_assign) {
             }
             params.names[params.count++] = zex_strndup(current_parser->previous.start,
                                                         current_parser->previous.length);
+            
+            if (is_rest) {
+                params.has_rest = true;
+                break;  /* Rest param must be last */
+            }
             
             skip_newlines();
         } while (match(TOKEN_COMMA));
@@ -684,7 +705,7 @@ static ASTNode* closure_empty(bool can_assign) {
     UNUSED(can_assign);
     Token start = current_parser->previous;
     
-    ParameterList params = {NULL, 0, 0};
+    ParameterList params = {NULL, 0, 0, false};
     
     skip_newlines();
     
@@ -869,10 +890,13 @@ static ASTNode* fun_declaration(void) {
     consume(TOKEN_LEFT_PAREN, "Expected '(' after function name");
     
     /* Parse parameters */
-    ParameterList params = {NULL, 0, 0};
+    ParameterList params = {NULL, 0, 0, false};
     
     if (!check(TOKEN_RIGHT_PAREN)) {
         do {
+            /* Check for rest parameter (..param) */
+            bool is_rest = match(TOKEN_DOT_DOT);
+            
             /* Allow 'self' keyword as parameter name (for methods) */
             if (!check(TOKEN_IDENTIFIER) && !check(TOKEN_SELF)) {
                 zex_error(ERROR_SYNTAX, current_parser->current.line,
@@ -890,6 +914,18 @@ static ASTNode* fun_declaration(void) {
             }
             params.names[params.count++] = zex_strndup(current_parser->previous.start,
                                                        current_parser->previous.length);
+            
+            if (is_rest) {
+                params.has_rest = true;
+                /* Rest parameter must be last */
+                if (check(TOKEN_COMMA)) {
+                    zex_error(ERROR_SYNTAX, current_parser->current.line,
+                              current_parser->current.column, current_parser->current.length,
+                              "Rest parameter must be last");
+                    current_parser->had_error = true;
+                }
+                break;
+            }
         } while (match(TOKEN_COMMA));
     }
     

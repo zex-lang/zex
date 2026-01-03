@@ -97,6 +97,9 @@ typedef enum {
     
     /* Tuples */
     OP_TUPLE,           /* Rdst, count, Rstart -- create tuple from count registers starting at Rstart */
+    
+    /* Spread call */
+    OP_CALL_SPREAD,     /* Rfunc, argc, Rbase, spread_mask -- call with spread expansion */
 } OpCode;
 
 /* Get opcode name for debugging */

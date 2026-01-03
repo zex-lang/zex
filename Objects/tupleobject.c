@@ -111,7 +111,7 @@ void init_tuple_class(void) {
     tuple_class = new_class(new_string_cstr("tuple"));
     
     for (TupleMethodDef* def = tuple_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, def->name);
+        ObjNative* native = new_native(def->function, def->arity, false, def->name);
         table_set(&tuple_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

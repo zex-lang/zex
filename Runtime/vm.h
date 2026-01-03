@@ -76,7 +76,7 @@ InterpretResult vm_interpret(VM* vm, const char* source);
 InterpretResult vm_run(VM* vm, ObjFunction* function);
 
 /* Define a native function */
-void vm_define_native(VM* vm, const char* name, NativeFn function, int arity);
+void vm_define_native(VM* vm, const char* name, NativeFn function, int arity, bool has_rest);
 
 /* Get the global VM instance */
 VM* vm_get(void);

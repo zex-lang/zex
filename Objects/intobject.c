@@ -47,7 +47,7 @@ void init_int_class(void) {
     
     /* Register all int methods */
     for (IntMethodDef* def = int_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, def->name);
+        ObjNative* native = new_native(def->function, def->arity, false, def->name);
         table_set(&int_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }

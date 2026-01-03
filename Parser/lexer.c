@@ -255,7 +255,8 @@ Token lexer_scan_token(Lexer* lexer) {
         case '[': return make_token(lexer, TOKEN_LEFT_BRACKET);
         case ']': return make_token(lexer, TOKEN_RIGHT_BRACKET);
         case ',': return make_token(lexer, TOKEN_COMMA);
-        case '.': return make_token(lexer, TOKEN_DOT);
+        case '.':
+            return make_token(lexer, match(lexer, '.') ? TOKEN_DOT_DOT : TOKEN_DOT);
         
         /* Operators with potential second character */
         case '+':

@@ -81,7 +81,7 @@ var s2 = 'Single quotes'
 var s3 = "Line 1\nLine 2"
 var s4 = "Tab:\there"
 var s5 = "Unicode: \u2764"      # ❤
-var s6 = "Emoji: \u{1F600}"    # 😀
+var s6 = "Emoji: \u{1F600}"     # 😀
 ```
 
 **Escape Sequences:**
@@ -364,6 +364,44 @@ fun factorial(n) {
 }
 
 println(factorial(5))  # 120
+```
+
+### Variadic Functions
+
+Use `..` prefix for rest parameters that collect multiple arguments into a tuple:
+
+```zex
+# Rest parameter collects args into tuple
+fun print_all(..items) {
+    for var item in items {
+        println(item)
+    }
+}
+print_all(1, 2, 3)  # items = (1, 2, 3)
+
+# Mixed: required + rest
+fun greet(prefix, ..names) {
+    for var name in names {
+        println(prefix + name)
+    }
+}
+greet("Hello ", "Alice", "Bob")
+```
+
+**Spread Arguments:**
+```zex
+fun sum(..nums) {
+    var total = 0
+    for var n in nums { total += n }
+    total
+}
+
+var t = (1, 2, 3)
+println(sum(..t))       # 6 - spreads tuple into args
+println(sum(10, ..t))   # 16 - mixed args
+
+var arr = [4, 5, 6]
+println(sum(..arr))     # 15 - also works with arrays
 ```
 
 ---

@@ -94,6 +94,7 @@ typedef struct {
     char** names;
     int count;
     int capacity;
+    bool has_rest;          /* True if last param is rest (..param) */
 } ParameterList;
 
 /* Except handler: except ExceptionType as var { body } */
@@ -153,6 +154,7 @@ struct ASTNode {
         struct {
             ASTNode* callee;
             ASTNode** arguments;
+            bool* is_spread;        /* is_spread[i] = true if arg i is spread (..arg) */
             int arg_count;
         } call;
         
@@ -334,7 +336,7 @@ ASTNode* ast_new_null_literal(int line, int column);
 ASTNode* ast_new_identifier(const char* name, int line, int column);
 ASTNode* ast_new_binary(BinaryOp op, ASTNode* left, ASTNode* right, int line, int column);
 ASTNode* ast_new_unary(UnaryOp op, ASTNode* operand, int line, int column);
-ASTNode* ast_new_call(ASTNode* callee, ASTNode** args, int arg_count, int line, int column);
+ASTNode* ast_new_call(ASTNode* callee, ASTNode** args, bool* is_spread, int arg_count, int line, int column);
 ASTNode* ast_new_get(ASTNode* object, const char* property, int line, int column);
 ASTNode* ast_new_set(ASTNode* object, const char* property, ASTNode* value, int line, int column);
 ASTNode* ast_new_set_compound(ASTNode* object, const char* property, BinaryOp op, ASTNode* value, int line, int column);

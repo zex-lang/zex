@@ -43,6 +43,7 @@ typedef enum {
     TOKEN_AND_AND,          /* && */
     TOKEN_OR_OR,            /* || */
     TOKEN_PIPE,             /* | */
+    TOKEN_DOT_DOT,          /* .. (rest/spread) */
     
     /* Literals */
     TOKEN_IDENTIFIER,

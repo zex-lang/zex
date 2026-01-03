@@ -45,17 +45,18 @@ typedef struct {
     const char* name;
     NativeFn function;
     int arity;
+    bool has_rest;
 } BuiltinDef;
 
 static BuiltinDef builtins[] = {
-    {"println", builtin_println, -1},
-    {"type",    builtin_type,    1},
-    {NULL, NULL, 0}
+    {"println", builtin_println, 0, true},
+    {"type",    builtin_type,    1, false},
+    {NULL, NULL, 0, false}
 };
 
 void register_builtins(VM* vm) {
     for (BuiltinDef* def = builtins; def->name != NULL; def++) {
-        vm_define_native(vm, def->name, def->function, def->arity);
+        vm_define_native(vm, def->name, def->function, def->arity, def->has_rest);
     }
     
     /* Built-in type classes */

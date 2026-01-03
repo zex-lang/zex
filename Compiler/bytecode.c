@@ -68,6 +68,7 @@ const char* opcode_name(OpCode op) {
         case OP_GET_EXCEPTION:  return "GET_EXCEPTION";
         case OP_CLEAR_EXCEPTION: return "CLEAR_EXCEPTION";
         case OP_TUPLE:          return "TUPLE";
+        case OP_CALL_SPREAD:    return "CALL_SPREAD";
         default:                return "UNKNOWN";;
     }
 }

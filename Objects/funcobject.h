@@ -14,7 +14,8 @@ struct Chunk;
 /* Function object */
 struct ObjFunction {
     Obj obj;
-    int arity;                  /* Number of parameters */
+    int arity;                  /* Number of required parameters */
+    bool has_rest;              /* Has rest parameter (..param) */
     int upvalue_count;          /* Number of captured variables */
     struct Chunk* chunk;        /* Bytecode */
     ObjString* name;            /* Function name */
@@ -33,12 +34,13 @@ typedef Value (*NativeFn)(VM* vm, int argc, Value* args);
 struct ObjNative {
     Obj obj;
     NativeFn function;
-    int arity;                  /* -1 for variadic */
+    int arity;                  /* Min required args */
+    bool has_rest;              /* Accepts extra args */
     ObjString* name;
 };
 
 /* Create a native function */
-ObjNative* new_native(NativeFn function, int arity, const char* name);
+ObjNative* new_native(NativeFn function, int arity, bool has_rest, const char* name);
 
 /* Get as native */
 #define AS_NATIVE(value)    ((ObjNative*)AS_OBJ(value))

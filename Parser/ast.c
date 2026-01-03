@@ -64,10 +64,11 @@ ASTNode* ast_new_unary(UnaryOp op, ASTNode* operand, int line, int column) {
     return node;
 }
 
-ASTNode* ast_new_call(ASTNode* callee, ASTNode** args, int arg_count, int line, int column) {
+ASTNode* ast_new_call(ASTNode* callee, ASTNode** args, bool* is_spread, int arg_count, int line, int column) {
     ASTNode* node = alloc_node(AST_CALL, line, column);
     node->as.call.callee = callee;
     node->as.call.arguments = args;
+    node->as.call.is_spread = is_spread;
     node->as.call.arg_count = arg_count;
     return node;
 }
@@ -308,6 +309,9 @@ void ast_free(ASTNode* node) {
                 ast_free(node->as.call.arguments[i]);
             }
             FREE_ARRAY(ASTNode*, node->as.call.arguments, node->as.call.arg_count);
+            if (node->as.call.is_spread) {
+                FREE_ARRAY(bool, node->as.call.is_spread, node->as.call.arg_count);
+            }
             break;
             
         case AST_GET:

@@ -571,7 +571,7 @@ void init_string_class(void) {
     
     /* Register all string methods */
     for (StringMethodDef* def = string_methods; def->name != NULL; def++) {
-        ObjNative* native = new_native(def->function, def->arity, def->name);
+        ObjNative* native = new_native(def->function, def->arity, false, def->name);
         table_set(&string_class->methods, new_string_cstr(def->name), OBJ_VAL(native));
     }
 }
