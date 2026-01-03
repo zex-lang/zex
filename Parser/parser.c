@@ -1120,8 +1120,15 @@ static ASTNode* expression_statement(void) {
 
 static ASTNode* break_statement(void) {
     Token break_token = current_parser->previous;
+    
+    /* Check for optional break value */
+    ASTNode* value = NULL;
+    if (!check(TOKEN_NEWLINE) && !check(TOKEN_EOF) && !check(TOKEN_RIGHT_BRACE) && !check(TOKEN_SEMICOLON)) {
+        value = expression();
+    }
+    
     consume_line_end();
-    return ast_new_break(break_token.line, break_token.column);
+    return ast_new_break(value, break_token.line, break_token.column);
 }
 
 static ASTNode* continue_statement(void) {

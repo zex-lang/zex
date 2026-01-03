@@ -276,6 +276,11 @@ struct ASTNode {
             ASTNode* value;        /* Can be NULL */
         } return_stmt;
         
+        /* AST_BREAK */
+        struct {
+            ASTNode* value;        /* Can be NULL - break with value like Rust */
+        } break_stmt;
+        
         /* AST_FUN_DECL */
         struct {
             char* name;
@@ -345,7 +350,7 @@ ASTNode* ast_new_while(ASTNode* condition, ASTNode* body, int line, int column);
 ASTNode* ast_new_do_while(ASTNode* body, ASTNode* condition, int line, int column);
 ASTNode* ast_new_for(ASTNode* initializer, ASTNode* condition, ASTNode* update, ASTNode* body, int line, int column);
 ASTNode* ast_new_for_in(const char* var_name, ASTNode* iterable, ASTNode* body, int line, int column);
-ASTNode* ast_new_break(int line, int column);
+ASTNode* ast_new_break(ASTNode* value, int line, int column);
 ASTNode* ast_new_continue(int line, int column);
 ASTNode* ast_new_return(ASTNode* value, int line, int column);
 ASTNode* ast_new_fun_decl(const char* name, ParameterList params, ASTNode* body, int line, int column);

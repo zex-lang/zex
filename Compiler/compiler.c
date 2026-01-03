@@ -750,6 +750,108 @@ static void compile_block(ASTNode* node) {
     if (current->next_reg < 0) current->next_reg = 0;
 }
 
+/* Forward declarations for expression-oriented helpers */
+static void compile_if_with_value(ASTNode* node, int dest_reg);
+static void compile_statement_with_value(ASTNode* node, int dest_reg);
+
+/*
+ * Compile a block and capture the last expression's value into dest_reg.
+ * This enables expression-oriented control flow like Rust.
+ */
+static void compile_block_with_value(ASTNode* node, int dest_reg) {
+    scope_begin(&current->scope);
+    
+    int count = node->as.block.count;
+    for (int i = 0; i < count; i++) {
+        ASTNode* stmt = node->as.block.statements[i];
+        
+        if (i == count - 1) {
+            /* Last statement - capture its value */
+            compile_statement_with_value(stmt, dest_reg);
+        } else {
+            compile_node(stmt, 0);
+        }
+    }
+    
+    /* If block is empty, result is null */
+    if (count == 0) {
+        emit_bytes(OP_LOAD_NULL, dest_reg, node->line);
+    }
+    
+    int popped = scope_end(&current->scope);
+    current->next_reg -= popped;
+    if (current->next_reg < 0) current->next_reg = 0;
+}
+
+/*
+ * Compile a statement and capture its resulting value into dest_reg.
+ * For expression-oriented control flow.
+ */
+static void compile_statement_with_value(ASTNode* stmt, int dest_reg) {
+    switch (stmt->type) {
+        case AST_EXPR_STMT:
+            /* Expression statement - compile expression into dest_reg */
+            compile_expression(stmt->as.expr_stmt.expression, dest_reg);
+            break;
+            
+        case AST_IF:
+            /* If statement - compile if with value */
+            compile_if_with_value(stmt, dest_reg);
+            break;
+            
+        case AST_BLOCK:
+            /* Block - compile block with value */
+            compile_block_with_value(stmt, dest_reg);
+            break;
+            
+        default:
+            /* Other statements (while, for, var, return, etc.) - compile normally, return null */
+            compile_node(stmt, 0);
+            emit_bytes(OP_LOAD_NULL, dest_reg, stmt->line);
+            break;
+    }
+}
+
+/*
+ * Compile if/else and capture the resulting value into dest_reg.
+ * Both branches store their last expression value in dest_reg.
+ */
+static void compile_if_with_value(ASTNode* node, int dest_reg) {
+    /* Condition */
+    int cond_reg = alloc_reg();
+    compile_expression(node->as.if_stmt.condition, cond_reg);
+    
+    int then_jump = emit_jump(OP_JUMP_IF_FALSE, cond_reg, node->line);
+    free_reg(1);
+    
+    /* Then branch - capture value */
+    compile_block_with_value(node->as.if_stmt.then_branch, dest_reg);
+    
+    if (node->as.if_stmt.else_branch) {
+        int else_jump = current_chunk()->count;
+        emit_byte(OP_JUMP, node->line);
+        emit_byte16(0xFFFF, node->line);
+        
+        patch_jump(then_jump);
+        
+        /* Else branch - check if it's another if (else if) */
+        if (node->as.if_stmt.else_branch->type == AST_IF) {
+            compile_if_with_value(node->as.if_stmt.else_branch, dest_reg);
+        } else {
+            compile_block_with_value(node->as.if_stmt.else_branch, dest_reg);
+        }
+        
+        /* Patch else jump */
+        int jump = current_chunk()->count - else_jump - 3;
+        current_chunk()->code[else_jump + 1] = jump & 0xFF;
+        current_chunk()->code[else_jump + 2] = (jump >> 8) & 0xFF;
+    } else {
+        patch_jump(then_jump);
+        /* No else branch - result is null */
+        emit_bytes(OP_LOAD_NULL, dest_reg, node->line);
+    }
+}
+
 static void compile_if(ASTNode* node) {
     /* Condition */
     int cond_reg = alloc_reg();
@@ -1180,18 +1282,17 @@ static void compile_closure(ASTNode* node, int dest_reg) {
         emit_bytes(OP_RETURN, reg, node->line);
         free_reg(1);
     } else {
-        /* Block body - compile statements with implicit return for last expr */
+        /* Block body - compile statements with implicit return for last statement */
         ASTNode* body = node->as.closure.body;
         int count = body->as.block.count;
         
         for (int i = 0; i < count; i++) {
             ASTNode* stmt = body->as.block.statements[i];
             
-            /* Check if this is the last statement and it's an expression statement */
-            if (i == count - 1 && stmt->type == AST_EXPR_STMT) {
-                /* Implicit return: compile expression and return it */
+            /* Last statement: compile and return its value (expression-oriented) */
+            if (i == count - 1) {
                 int reg = alloc_reg();
-                compile_expression(stmt->as.expr_stmt.expression, reg);
+                compile_statement_with_value(stmt, reg);
                 emit_bytes(OP_RETURN, reg, stmt->line);
                 free_reg(1);
             } else {
@@ -1236,18 +1337,17 @@ static void compile_function(ASTNode* node, bool is_method) {
         current->next_reg++;
     }
     
-    /* Compile body with implicit return for last expression statement */
+    /* Compile body with implicit return for last statement (expression-oriented) */
     ASTNode* body = node->as.fun_decl.body;
     int count = body->as.block.count;
     
     for (int i = 0; i < count; i++) {
         ASTNode* stmt = body->as.block.statements[i];
         
-        /* Check if this is the last statement and it's an expression statement */
-        if (i == count - 1 && stmt->type == AST_EXPR_STMT) {
-            /* Implicit return: compile expression and return it */
+        /* Last statement: compile and return its value (expression-oriented) */
+        if (i == count - 1) {
             int reg = alloc_reg();
-            compile_expression(stmt->as.expr_stmt.expression, reg);
+            compile_statement_with_value(stmt, reg);
             emit_bytes(OP_RETURN, reg, stmt->line);
             free_reg(1);
         } else {

@@ -180,8 +180,10 @@ ASTNode* ast_new_for_in(const char* var_name, ASTNode* iterable, ASTNode* body, 
     return node;
 }
 
-ASTNode* ast_new_break(int line, int column) {
-    return alloc_node(AST_BREAK, line, column);
+ASTNode* ast_new_break(ASTNode* value, int line, int column) {
+    ASTNode* node = alloc_node(AST_BREAK, line, column);
+    node->as.break_stmt.value = value;
+    return node;
 }
 
 ASTNode* ast_new_continue(int line, int column) {
@@ -403,8 +405,10 @@ void ast_free(ASTNode* node) {
             break;
             
         case AST_BREAK:
+            ast_free(node->as.break_stmt.value);
+            break;
+            
         case AST_CONTINUE:
-            /* No children to free */
             break;
             
         case AST_RETURN:
@@ -640,7 +644,13 @@ void ast_print(ASTNode* node, int indent) {
             ast_print(node->as.for_in_stmt.body, indent + 1);
             break;
         case AST_BREAK:
-            printf("BREAK\n");
+            printf("BREAK");
+            if (node->as.break_stmt.value) {
+                printf(" with value:\n");
+                ast_print(node->as.break_stmt.value, indent + 1);
+            } else {
+                printf("\n");
+            }
             break;
         case AST_CONTINUE:
             printf("CONTINUE\n");
