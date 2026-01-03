@@ -309,10 +309,56 @@ static ASTNode* grouping(bool can_assign) {
     UNUSED(can_assign);
     Token token = current_parser->previous;
     skip_newlines();
-    ASTNode* expr = expression();
+    
+    /* Empty tuple () */
+    if (check(TOKEN_RIGHT_PAREN)) {
+        advance();
+        return ast_new_tuple(NULL, 0, token.line, token.column);
+    }
+    
+    /* Parse first expression */
+    ASTNode* first = expression();
     skip_newlines();
+    
+    /* Check for comma - if present, it's a tuple */
+    if (match(TOKEN_COMMA)) {
+        ASTNode** elements = NULL;
+        int count = 0;
+        int capacity = 0;
+        
+        /* Add first element */
+        if (count >= capacity) {
+            int old_cap = capacity;
+            capacity = capacity < 8 ? 8 : capacity * 2;
+            elements = GROW_ARRAY(ASTNode*, elements, old_cap, capacity);
+        }
+        elements[count++] = first;
+        
+        skip_newlines();
+        
+        /* Parse remaining elements (or could be empty after comma for single-element tuple) */
+        while (!check(TOKEN_RIGHT_PAREN) && !check(TOKEN_EOF)) {
+            ASTNode* elem = expression();
+            
+            if (count >= capacity) {
+                int old_cap = capacity;
+                capacity = capacity * 2;
+                elements = GROW_ARRAY(ASTNode*, elements, old_cap, capacity);
+            }
+            elements[count++] = elem;
+            
+            skip_newlines();
+            if (!match(TOKEN_COMMA)) break;
+            skip_newlines();
+        }
+        
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after tuple elements");
+        return ast_new_tuple(elements, count, token.line, token.column);
+    }
+    
+    /* No comma - it's a grouping */
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression");
-    return ast_new_grouping(expr, token.line, token.column);
+    return ast_new_grouping(first, token.line, token.column);
 }
 
 static ASTNode* array_literal(bool can_assign) {
@@ -462,10 +508,70 @@ static ASTNode* call(ASTNode* callee, bool can_assign) {
 
 static ASTNode* dot(ASTNode* left, bool can_assign) {
     Token dot_token = current_parser->previous;
-    consume(TOKEN_IDENTIFIER, "Expected property name after '.'");
+    Token name_token;
+    bool needs_recursive_dot = false;
+    int recursive_index = 0;
     
-    Token name_token = current_parser->previous;
+    /* Accept identifier, integer, or float for property name.
+     * For float tokens like "1.1", we extract the integer part and 
+     * recursively process the ".1" part to support tuple.1.1 syntax. */
+    if (match(TOKEN_IDENTIFIER)) {
+        name_token = current_parser->previous;
+    } else if (match(TOKEN_INT)) {
+        name_token = current_parser->previous;
+    } else if (match(TOKEN_FLOAT)) {
+        /* Float token like "1.1" - extract just the integer part before the dot */
+        Token float_token = current_parser->previous;
+        
+        /* Find the dot position in the float literal */
+        const char* float_str = float_token.start;
+        int dot_pos = 0;
+        while (dot_pos < float_token.length && float_str[dot_pos] != '.') {
+            dot_pos++;
+        }
+        
+        /* Create a synthetic token for just the integer part */
+        name_token.type = TOKEN_INT;
+        name_token.start = float_token.start;
+        name_token.length = dot_pos;
+        name_token.line = float_token.line;
+        name_token.column = float_token.column;
+        
+        /* Mark that we need to do a recursive .N access */
+        needs_recursive_dot = true;
+        
+        /* Parse the fractional part as integer index */
+        const char* frac_start = float_str + dot_pos + 1;
+        int frac_len = float_token.length - dot_pos - 1;
+        recursive_index = 0;
+        for (int i = 0; i < frac_len; i++) {
+            recursive_index = recursive_index * 10 + (frac_start[i] - '0');
+        }
+    } else {
+        zex_error(ERROR_SYNTAX, current_parser->current.line,
+                  current_parser->current.column, current_parser->current.length,
+                  "Expected property name after '.'");
+        current_parser->had_error = true;
+        return NULL;
+    }
+    
     char* property = zex_strndup(name_token.start, name_token.length);
+    
+    /* If we split a float, we can't allow assignments - just build nested gets */
+    if (needs_recursive_dot) {
+        ASTNode* node = ast_new_get(left, property, dot_token.line, dot_token.column);
+        zex_free(property, name_token.length + 1);
+        
+        /* Now process the recursive .N access */
+        char index_str[32];
+        snprintf(index_str, sizeof(index_str), "%d", recursive_index);
+        char* index_prop = zex_strndup(index_str, strlen(index_str));
+        node = ast_new_get(node, index_prop, dot_token.line, dot_token.column);
+        /* index_prop ownership transferred to AST node */
+        return node;
+    }
+    
+    /* Original flow for normal property access */
     
     /* Check for property assignment */
     if (can_assign && match(TOKEN_EQUAL)) {

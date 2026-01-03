@@ -26,6 +26,7 @@ typedef enum {
     OBJ_BOUND_METHOD,
     OBJ_ARRAY,
     OBJ_EXCEPTION,
+    OBJ_TUPLE,
 } ObjType;
 
 /*

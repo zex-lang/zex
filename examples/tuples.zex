@@ -1,0 +1,37 @@
+# Tuple Examples
+
+# Basic tuple creation
+var point = (10, 20)
+println("Point: " + string(point))
+
+# Access elements with .0, .1, etc.
+var x = point.0
+var y = point.1
+println("X: " + string(x) + ", Y: " + string(y))
+
+# Single-element tuple (needs trailing comma)
+var single = (42,)
+println("Single: " + string(single))
+
+# Empty tuple
+var empty = ()
+println("Empty: " + string(empty))
+
+# Tuple methods
+println("")
+println("Length: " + string(point.len()))
+println("First: " + string(point.first()))
+println("Last: " + string(point.last()))
+println("Contains 10: " + string(point.contains(10)))
+println("Contains 99: " + string(point.contains(99)))
+println("Empty: " + string(point.empty()))
+
+# Nested tuples
+var nested = ((1, 2), (3, 4))
+println("")
+println("Nested: " + string(nested))
+println("nested.0: " + string(nested.0))
+println("nested.1.1: " + string(nested.1.1))
+
+println("")
+println("Tuple tests complete!")

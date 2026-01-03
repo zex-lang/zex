@@ -15,6 +15,7 @@
 #include "classobject.h"
 #include "arrayobject.h"
 #include "exceptionobject.h"
+#include "tupleobject.h"
 #include <math.h>
 
 /* Forward declare vm_run_frame */
@@ -127,6 +128,7 @@ void vm_init(VM* vm) {
     init_int_class();
     init_float_class();
     init_array_class();
+    init_tuple_class();
     
     vm->null_class = get_null_class();
     vm->bool_class = get_bool_class();
@@ -361,6 +363,7 @@ static ObjClass* get_value_class(Value val) {
     if (IS_INT(val)) return get_int_class();
     if (IS_FLOAT(val)) return get_float_class();
     if (IS_BOOL(val)) return get_bool_class();
+    if (IS_TUPLE(val)) return get_tuple_class();
     return NULL;
 }
 
@@ -736,6 +739,44 @@ static Value vm_run_frame(VM* vm) {
                         break;
                     }
                     vm_error(vm, "Undefined method '%s' on class", name->chars);
+                    return NULL_VAL;
+                } else if (IS_TUPLE(obj_val)) {
+                    ObjTuple* tuple = AS_TUPLE(obj_val);
+                    
+                    /* Check for numeric property like .0, .1, .2 */
+                    const char* prop = name->chars;
+                    bool is_numeric = true;
+                    for (int i = 0; i < name->length; i++) {
+                        if (prop[i] < '0' || prop[i] > '9') {
+                            is_numeric = false;
+                            break;
+                        }
+                    }
+                    
+                    if (is_numeric && name->length > 0) {
+                        int index = 0;
+                        for (int i = 0; i < name->length; i++) {
+                            index = index * 10 + (prop[i] - '0');
+                        }
+                        
+                        if (index >= 0 && index < tuple->count) {
+                            REG(dst) = tuple->items[index];
+                            break;
+                        } else {
+                            vm_error(vm, "Tuple index out of bounds: %d (size: %d)", index, tuple->count);
+                            return NULL_VAL;
+                        }
+                    }
+                    
+                    /* Check for tuple methods */
+                    Value method;
+                    if (get_builtin_method(obj_val, name, &method)) {
+                        ObjBoundMethod* bound = new_bound_method(obj_val, method);
+                        REG(dst) = OBJ_VAL(bound);
+                        break;
+                    }
+                    
+                    vm_error(vm, "Undefined property '%s' on tuple", name->chars);
                     return NULL_VAL;
                 } else {
                     /* Builtin type method lookup */
@@ -1124,6 +1165,17 @@ static Value vm_run_frame(VM* vm) {
                 /* Clear current exception (after handling) */
                 vm->has_exception = false;
                 vm->current_exception = NULL_VAL;
+                break;
+            }
+            
+            case OP_TUPLE: {
+                uint8_t dst = READ_BYTE();
+                uint8_t count = READ_BYTE();
+                uint8_t start_reg = READ_BYTE();
+                
+                Value* items = count > 0 ? &REG(start_reg) : NULL;
+                ObjTuple* tuple = new_tuple(items, count);
+                REG(dst) = OBJ_VAL(tuple);
                 break;
             }
             

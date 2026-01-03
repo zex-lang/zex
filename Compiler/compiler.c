@@ -457,6 +457,26 @@ static void compile_array(ASTNode* node, int dest_reg) {
     free_reg(count);
 }
 
+static void compile_tuple(ASTNode* node, int dest_reg) {
+    int count = node->as.tuple.count;
+    int start_reg = current->next_reg;
+    
+    /* Compile each element into consecutive registers */
+    for (int i = 0; i < count; i++) {
+        int elem_reg = alloc_reg();
+        compile_expression(node->as.tuple.elements[i], elem_reg);
+    }
+    
+    /* Emit OP_TUPLE: dest_reg, count, start_reg */
+    emit_byte(OP_TUPLE, node->line);
+    emit_byte(dest_reg, node->line);
+    emit_byte(count, node->line);
+    emit_byte(start_reg, node->line);
+    
+    /* Free the temporary registers */
+    free_reg(count);
+}
+
 static void compile_index_get(ASTNode* node, int dest_reg) {
     int arr_reg = alloc_reg();
     int idx_reg = alloc_reg();
@@ -557,6 +577,9 @@ static void compile_expression(ASTNode* node, int dest_reg) {
             break;
         case AST_COMPOUND_ASSIGN:
             compile_compound_assign(node, dest_reg);
+            break;
+        case AST_TUPLE:
+            compile_tuple(node, dest_reg);
             break;
         default:
             zex_error(ERROR_COMPILE, node->line, 0, 0, "Unknown expression type: %d", node->type);

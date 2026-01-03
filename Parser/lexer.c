@@ -174,13 +174,23 @@ static Token number(Lexer* lexer) {
         advance(lexer);
     }
     
-    /* Look for decimal part */
+    /* Look for decimal part - but NOT if it would be followed by another dot.
+     * This allows tuple.1.2 to be parsed as tuple DOT 1 DOT 2 instead of tuple DOT 1.2 */
     if (peek(lexer) == '.' && isdigit(peek_next(lexer))) {
-        is_float = true;
-        advance(lexer);  /* Consume '.' */
+        /* Scan ahead to see if after the decimal digits there's another dot */
+        const char* lookahead = lexer->current + 1; /* skip the '.' */
+        while (*lookahead && isdigit(*lookahead)) {
+            lookahead++;
+        }
         
-        while (isdigit(peek(lexer))) {
-            advance(lexer);
+        /* Only treat as float if NOT followed by another dot */
+        if (*lookahead != '.') {
+            is_float = true;
+            advance(lexer);  /* Consume '.' */
+            
+            while (isdigit(peek(lexer))) {
+                advance(lexer);
+            }
         }
     }
     

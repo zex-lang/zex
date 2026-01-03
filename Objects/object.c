@@ -14,6 +14,7 @@
 #include "classobject.h"
 #include "arrayobject.h"
 #include "exceptionobject.h"
+#include "tupleobject.h"
 #include "memory.h"
 
 /* Global object list for GC */
@@ -46,6 +47,7 @@ const char* obj_type_name(ObjType type) {
         case OBJ_BOUND_METHOD:  return "bound_method";
         case OBJ_ARRAY:         return "array";
         case OBJ_EXCEPTION:     return "exception";
+        case OBJ_TUPLE:         return "tuple";
         default:                return "unknown";
     }
 }
@@ -141,6 +143,17 @@ void print_value(Value value) {
             } else {
                 printf("Exception: %s", exc->message ? exc->message->chars : "");
             }
+            break;
+        }
+        case OBJ_TUPLE: {
+            ObjTuple* tuple = AS_TUPLE(value);
+            printf("(");
+            for (int i = 0; i < tuple->count; i++) {
+                if (i > 0) printf(", ");
+                print_value(tuple->items[i]);
+            }
+            if (tuple->count == 1) printf(",");
+            printf(")");
             break;
         }
     }
@@ -249,6 +262,48 @@ ObjString* value_to_string(Value value) {
             
             ObjString* result = new_string(buffer, length);
             zex_free(buffer, capacity);
+            return result;
+        }
+        case OBJ_TUPLE: {
+            ObjTuple* tuple = AS_TUPLE(value);
+            if (tuple->count == 0) return new_string_cstr("()");
+            
+            size_t capacity = 64;
+            size_t length = 0;
+            char* buf = zex_alloc(capacity);
+            
+            buf[length++] = '(';
+            
+            for (int i = 0; i < tuple->count; i++) {
+                if (i > 0) {
+                    if (length + 2 >= capacity) {
+                        size_t old_cap = capacity;
+                        capacity *= 2;
+                        buf = zex_realloc(buf, old_cap, capacity);
+                    }
+                    buf[length++] = ',';
+                    buf[length++] = ' ';
+                }
+                
+                ObjString* item_str = value_to_string(tuple->items[i]);
+                size_t item_len = item_str->length;
+                
+                while (length + item_len + 4 >= capacity) {
+                    size_t old_cap = capacity;
+                    capacity = capacity * 2 + item_len;
+                    buf = zex_realloc(buf, old_cap, capacity);
+                }
+                
+                memcpy(buf + length, item_str->chars, item_len);
+                length += item_len;
+            }
+            
+            if (tuple->count == 1) buf[length++] = ',';
+            buf[length++] = ')';
+            buf[length] = '\0';
+            
+            ObjString* result = new_string(buf, length);
+            zex_free(buf, capacity);
             return result;
         }
     }
@@ -362,8 +417,15 @@ static void free_object(Obj* object) {
             break;
         }
         case OBJ_EXCEPTION: {
-            /* ObjException only stores pointers to other objects, no extra allocation */
             zex_free(object, sizeof(ObjException));
+            break;
+        }
+        case OBJ_TUPLE: {
+            ObjTuple* tuple = (ObjTuple*)object;
+            if (tuple->items != NULL) {
+                FREE_ARRAY(Value, tuple->items, tuple->count);
+            }
+            zex_free(object, sizeof(ObjTuple));
             break;
         }
     }

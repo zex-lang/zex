@@ -265,6 +265,13 @@ ASTNode* ast_new_raise(ASTNode* exception, int line, int column) {
     return node;
 }
 
+ASTNode* ast_new_tuple(ASTNode** elements, int count, int line, int column) {
+    ASTNode* node = alloc_node(AST_TUPLE, line, column);
+    node->as.tuple.elements = elements;
+    node->as.tuple.count = count;
+    return node;
+}
+
 void ast_free(ASTNode* node) {
     if (node == NULL) return;
     
@@ -462,6 +469,13 @@ void ast_free(ASTNode* node) {
             
         case AST_RAISE:
             ast_free(node->as.raise_stmt.exception);
+            break;
+            
+        case AST_TUPLE:
+            for (int i = 0; i < node->as.tuple.count; i++) {
+                ast_free(node->as.tuple.elements[i]);
+            }
+            FREE_ARRAY(ASTNode*, node->as.tuple.elements, node->as.tuple.count);
             break;
     }
     
@@ -695,6 +709,12 @@ void ast_print(ASTNode* node, int indent) {
             printf("RAISE\n");
             if (node->as.raise_stmt.exception) {
                 ast_print(node->as.raise_stmt.exception, indent + 1);
+            }
+            break;
+        case AST_TUPLE:
+            printf("TUPLE [%d elements]\n", node->as.tuple.count);
+            for (int i = 0; i < node->as.tuple.count; i++) {
+                ast_print(node->as.tuple.elements[i], indent + 1);
             }
             break;
     }

@@ -67,6 +67,7 @@ const char* opcode_name(OpCode op) {
         case OP_CHECK_EXC_TYPE: return "CHECK_EXC_TYPE";
         case OP_GET_EXCEPTION:  return "GET_EXCEPTION";
         case OP_CLEAR_EXCEPTION: return "CLEAR_EXCEPTION";
+        case OP_TUPLE:          return "TUPLE";
         default:                return "UNKNOWN";;
     }
 }
@@ -143,6 +144,9 @@ int opcode_operand_count(OpCode op) {
         
         case OP_CHECK_EXC_TYPE:
             return 3;  /* Rdst, idx16 */
+        
+        case OP_TUPLE:
+            return 3;  /* Rdst, count, start_reg */
             
         default:
             return 1;

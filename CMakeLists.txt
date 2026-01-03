@@ -36,6 +36,7 @@ set(OBJECTS_SRC
     Objects/classobject.c
     Objects/arrayobject.c
     Objects/exceptionobject.c
+    Objects/tupleobject.c
 )
 
 set(PARSER_SRC

@@ -94,6 +94,9 @@ typedef enum {
     OP_CHECK_EXC_TYPE,  /* Rdst, idx16 -- check if current exception matches type, bool to Rdst */
     OP_GET_EXCEPTION,   /* R -- get current exception into R */
     OP_CLEAR_EXCEPTION, /* -- clear current exception (after handling) */
+    
+    /* Tuples */
+    OP_TUPLE,           /* Rdst, count, Rstart -- create tuple from count registers starting at Rstart */
 } OpCode;
 
 /* Get opcode name for debugging */

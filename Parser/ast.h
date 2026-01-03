@@ -50,6 +50,7 @@ typedef enum {
     AST_PROGRAM,
     AST_TRY,
     AST_RAISE,
+    AST_TUPLE,
 } ASTNodeType;
 
 /* Binary operators */
@@ -186,6 +187,12 @@ struct ASTNode {
             ASTNode** elements;
             int count;
         } array;
+        
+        /* AST_TUPLE */
+        struct {
+            ASTNode** elements;
+            int count;
+        } tuple;
         
         /* AST_INDEX_GET - arr[index] */
         struct {
@@ -351,6 +358,7 @@ ASTNode* ast_new_program(ASTNode** statements, int count);
 ASTNode* ast_new_try(ASTNode* try_body, ExceptHandler* handlers, int handler_count,
                      ASTNode* else_body, ASTNode* finally_body, int line, int column);
 ASTNode* ast_new_raise(ASTNode* exception, int line, int column);
+ASTNode* ast_new_tuple(ASTNode** elements, int count, int line, int column);
 
 /* Free AST */
 void ast_free(ASTNode* node);

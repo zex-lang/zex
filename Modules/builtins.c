@@ -9,6 +9,7 @@
 #include "stringobject.h"
 #include "nullobject.h"
 #include "exceptionobject.h"
+#include "tupleobject.h"
 
 static Value builtin_println(VM* vm, int argc, Value* args) {
     UNUSED(vm);
@@ -63,6 +64,7 @@ void register_builtins(VM* vm) {
     table_set(&vm->globals, new_string_cstr("string"), OBJ_VAL(vm->string_class));
     table_set(&vm->globals, new_string_cstr("bool"), OBJ_VAL(vm->bool_class));
     table_set(&vm->globals, new_string_cstr("null"), OBJ_VAL(vm->null_class));
+    table_set(&vm->globals, new_string_cstr("tuple"), OBJ_VAL(get_tuple_class()));
     
     /* Exception classes */
     table_set(&vm->globals, new_string_cstr("Exception"), OBJ_VAL(get_exception_class()));
