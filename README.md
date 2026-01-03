@@ -1,86 +1,85 @@
 # Zex
 
-A dynamically typed programming language built in C.
+<p align="center">
+  <img src="Docs/icon.png" alt="Zex" width="180">
+</p>
 
-## Build
+<p align="center">
+  <strong>A fast, expressive, dynamically-typed programming language</strong>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#license">License</a>
+</p>
+
+## Features
+
+- **Simple syntax** — Clean, readable code with minimal boilerplate
+- **First-class functions** — Closures, higher-order functions, and lambdas
+- **Object-oriented** — Classes with inheritance and methods
+- **Fast execution** — Register-based bytecode VM written in C
+
+## Installation
 
 ```bash
+git clone https://github.com/zex-lang/zex.git
+cd zex
 cmake -B build && cmake --build build
 ```
 
-## Run
+## Quick Start
 
 ```bash
-./build/zex examples/hello.zex
+./build/zex hello.zex
 ```
 
-## Syntax
+```zex
+# hello.zex
+var name = "World"
+println("Hello, " + name + "!")
 
-### Variables
-```
-var name = "Zex"
-var age = 1
-var pi = 3.14159
-```
+# Functions with implicit returns
+fun square(x) { x * x }
 
-### Functions
-```
-fun greet(name) {
-    println("Hello, " + name + "!")
-}
+# Closures
+var numbers = [1, 2, 3, 4, 5]
+var doubled = numbers.map(|n| n * 2)
 
-fun factorial(n) {
-    if n <= 1 {
-        return 1
-    }
-    return n * factorial(n - 1)
-}
-```
-
-### Classes
-```
-class Animal {
+# Classes
+class Greeter {
     fun init(self, name) {
         self.name = name
     }
-    
-    fun speak(self) {
-        println(self.name + " makes a sound")
+    fun greet(self) {
+        println("Hello, " + self.name + "!")
     }
 }
 
-class Dog < Animal {
-    fun speak(self) {
-        println(self.name + " says: Woof!")
-    }
-}
-
-var dog = Dog("Rex")
-dog.speak()
+Greeter("Zex").greet()
 ```
 
-### Control Flow
-```
-if x > 10 {
-    println("big")
-} else {
-    println("small")
-}
+## Documentation
 
-var i = 0
-while i < 5 {
-    println(i)
-    i += 1
-}
-```
+| Topic | Description |
+|-------|-------------|
+| [Language Reference](Docs/language-reference.md) | Complete guide to Zex syntax, data types, control flow, functions, classes, and more |
+| [Built-in Functions](Docs/built-in-functions.md) | Documentation for global functions like `println` and `type` |
+| [Standard Types](Docs/standard-types.md) | Built-in type classes (int, float, string, array, tuple) and their methods |
 
-## Debug
+
+### CLI Options
 
 ```bash
-./build/zex script.zex --dump-ast
-./build/zex script.zex --dump-bytecode
+zex script.zex              # Run a script
+zex -c script.zex           # Compile to bytecode
+zex --dump-ast script.zex   # Show AST
+zex --dump-bytecode script.zex  # Show bytecode
 ```
 
 ## License
 
-MIT
+MIT © 2026
