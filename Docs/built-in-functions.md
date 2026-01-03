@@ -11,7 +11,7 @@ Prints one or more values to standard output followed by a newline.
 ### Syntax
 
 ```zex
-println(value1, value2, ...)
+println(value1, value2, ..)
 ```
 
 ### Parameters
@@ -56,7 +56,7 @@ Prints values to standard output WITHOUT a trailing newline.
 ### Syntax
 
 ```zex
-print(value1, value2, ...)
+print(value1, value2, ..)
 ```
 
 ### Parameters

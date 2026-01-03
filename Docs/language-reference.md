@@ -452,7 +452,7 @@ println(sum)  # 15
 
 ## Classes
 
-Classes use visibility modifiers and modern constructor syntax:
+Classes are defined using the `class` keyword. Visibility modifiers are used to control access to class members:
 
 ```zex
 class Counter {

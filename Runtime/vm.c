@@ -849,6 +849,17 @@ static Value vm_run_frame(VM* vm) {
                     
                     Value value;
                     if (table_get(&instance->properties, name, &value)) {
+                        /* Check visibility for property access */
+                        Value vis_val;
+                        if (table_get(&klass->member_visibility, name, &vis_val)) {
+                            int visibility = AS_INT(vis_val);
+                            ObjClass* calling_class = frame->function->owner_class;
+                            if (!check_visibility(visibility, klass, calling_class)) {
+                                const char* vis_name = visibility == 0 ? "private" : "protected";
+                                vm_error(vm, "Cannot access %s property '%s'", vis_name, name->chars);
+                                return NULL_VAL;
+                            }
+                        }
                         REG(dst) = value;
                         break;
                     }
@@ -966,6 +977,18 @@ static Value vm_run_frame(VM* vm) {
                         vm_run_frame(vm);
                         frame = &vm->frames[vm->frame_count - 1];
                         break;
+                    }
+                    
+                    /* Check visibility for property assignment */
+                    Value vis_val;
+                    if (table_get(&klass->member_visibility, name, &vis_val)) {
+                        int visibility = AS_INT(vis_val);
+                        ObjClass* calling_class = frame->function->owner_class;
+                        if (!check_visibility(visibility, klass, calling_class)) {
+                            const char* vis_name = visibility == 0 ? "private" : "protected";
+                            vm_error(vm, "Cannot set %s property '%s'", vis_name, name->chars);
+                            return NULL_VAL;
+                        }
                     }
                     
                     table_set(&instance->properties, name, REG(val_reg));

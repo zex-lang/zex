@@ -1531,12 +1531,17 @@ static void compile_class_decl(ASTNode* node) {
             
             free_reg(1);
         } else if (member->member_type == MEMBER_FIELD) {
+            /* Always store visibility info for the field */
+            int prop_idx = identifier_constant(member->name);
+            emit_byte(OP_SET_VISIBILITY, node->line);
+            emit_byte(class_reg, node->line);
+            emit_byte16(prop_idx, node->line);
+            emit_byte((uint8_t)member->visibility, node->line);
+            
             /* Compile field initializer if present */
             if (member->as.field.initializer != NULL) {
                 int val_reg = alloc_reg();
                 compile_expression(member->as.field.initializer, val_reg);
-                
-                int prop_idx = identifier_constant(member->name);
                 
                 if (member->is_static) {
                     /* Static field: set on class's static_members table */
@@ -1554,7 +1559,7 @@ static void compile_class_decl(ASTNode* node) {
                 
                 free_reg(1);
             }
-            /* Fields without initializers don't need bytecode - they'll be undefined */
+            /* Fields without initializers will be set via self.field = ... in constructor */
         } else if (member->member_type == MEMBER_COMPUTED_PROP) {
             /* Compile computed property getter and setter */
             int prop_idx = identifier_constant(member->name);
