@@ -51,10 +51,13 @@ var doubled = numbers.map(|n| n * 2)
 
 # Classes
 class Greeter {
-    fun init(self, name) {
+    private name
+    
+    public Greeter(name) {
         self.name = name
     }
-    fun greet(self) {
+    
+    public greet() {
         println("Hello, " + self.name + "!")
     }
 }
