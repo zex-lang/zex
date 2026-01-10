@@ -32,6 +32,16 @@ const char* token_type_to_string(TokenType type) {
             return ";";
         case TokenType::ASSIGN:
             return "=";
+        case TokenType::PLUS:
+            return "+";
+        case TokenType::MINUS:
+            return "-";
+        case TokenType::STAR:
+            return "*";
+        case TokenType::SLASH:
+            return "/";
+        case TokenType::PERCENT:
+            return "%";
         case TokenType::IDENTIFIER:
             return "identifier";
         case TokenType::INT_LITERAL:
@@ -199,11 +209,31 @@ Token Lexer::scan_token() {
         advance();
         return make_token(TokenType::ASSIGN);
     }
+    if (c == '+') {
+        advance();
+        return make_token(TokenType::PLUS);
+    }
+    if (c == '*') {
+        advance();
+        return make_token(TokenType::STAR);
+    }
+    if (c == '/') {
+        advance();
+        return make_token(TokenType::SLASH);
+    }
+    if (c == '%') {
+        advance();
+        return make_token(TokenType::PERCENT);
+    }
 
     if (c == '-' && peek() == '>') {
         advance();
         advance();
         return make_token(TokenType::ARROW);
+    }
+    if (c == '-') {
+        advance();
+        return make_token(TokenType::MINUS);
     }
 
     if (is_alpha(c)) {

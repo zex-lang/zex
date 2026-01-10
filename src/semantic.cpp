@@ -59,6 +59,11 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         next_stack_offset_ -= 8;
 
         local_variables_[var_decl->name] = info;
+    } else if (auto* assign = dynamic_cast<AssignStmt*>(stmt)) {
+        if (local_variables_.find(assign->name) == local_variables_.end()) {
+            throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, assign->name);
+        }
+        analyze_expression(assign->value.get());
     } else if (auto* ret = dynamic_cast<ReturnStmt*>(stmt)) {
         analyze_expression(ret->value.get());
     }
@@ -80,6 +85,12 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
         if (function_table_.find(call->callee) == function_table_.end()) {
             throw CompileError(ErrorCode::UNDEFINED_FUNCTION, {}, call->callee);
         }
+        return;
+    }
+
+    if (auto* binary = dynamic_cast<BinaryExpr*>(expr)) {
+        analyze_expression(binary->left.get());
+        analyze_expression(binary->right.get());
         return;
     }
 

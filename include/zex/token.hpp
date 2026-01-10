@@ -7,27 +7,29 @@
 namespace zex {
 
 enum class TokenType {
-    // Keywords
-    KW_FUN,     // fun
-    KW_VAR,     // var
-    KW_RETURN,  // return
-    KW_INT,     // int
+    KW_FUN,
+    KW_VAR,
+    KW_RETURN,
+    KW_INT,
 
-    // Symbols
-    LPAREN,     // (
-    RPAREN,     // )
-    LBRACE,     // {
-    RBRACE,     // }
-    ARROW,      // ->
-    COLON,      // :
-    SEMICOLON,  // ;
-    ASSIGN,     // =
+    LPAREN,
+    RPAREN,
+    LBRACE,
+    RBRACE,
+    ARROW,
+    COLON,
+    SEMICOLON,
+    ASSIGN,
 
-    // Literals and identifiers
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
+    PERCENT,
+
     IDENTIFIER,
     INT_LITERAL,
 
-    // Special
     END_OF_FILE,
     INVALID
 };
@@ -44,7 +46,6 @@ struct Token {
     Token() : type(TokenType::INVALID), value(""), line(0), column(0) {}
 };
 
-// Convert token type to string for debugging
 const char* token_type_to_string(TokenType type);
 
 }  // namespace zex

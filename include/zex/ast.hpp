@@ -8,13 +8,11 @@
 
 namespace zex {
 
-// Forward declarations
 struct Expression;
 struct Statement;
 struct Function;
 struct Program;
 
-// Type representation (only int for now)
 enum class TypeKind { INT };
 
 struct Type {
@@ -24,38 +22,43 @@ struct Type {
     explicit Type(TypeKind k) : kind(k) {}
 };
 
-// Base expression node
+enum class BinaryOp { ADD, SUB, MUL, DIV, MOD };
+
 struct Expression {
     virtual ~Expression() = default;
 };
 
-// Integer literal: 42
 struct IntLiteral : Expression {
     int64_t value;
 
     explicit IntLiteral(int64_t v) : value(v) {}
 };
 
-// Identifier: x
 struct Identifier : Expression {
     std::string name;
 
     explicit Identifier(std::string n) : name(std::move(n)) {}
 };
 
-// Function call: foo()
 struct CallExpr : Expression {
     std::string callee;
 
     explicit CallExpr(std::string name) : callee(std::move(name)) {}
 };
 
-// Base statement node
+struct BinaryExpr : Expression {
+    BinaryOp op;
+    std::unique_ptr<Expression> left;
+    std::unique_ptr<Expression> right;
+
+    BinaryExpr(BinaryOp o, std::unique_ptr<Expression> l, std::unique_ptr<Expression> r)
+        : op(o), left(std::move(l)), right(std::move(r)) {}
+};
+
 struct Statement {
     virtual ~Statement() = default;
 };
 
-// Variable declaration: var x: int = expr;
 struct VarDecl : Statement {
     std::string name;
     Type type;
@@ -65,14 +68,20 @@ struct VarDecl : Statement {
         : name(std::move(n)), type(t), initializer(std::move(init)) {}
 };
 
-// Return statement: return expr;
+struct AssignStmt : Statement {
+    std::string name;
+    std::unique_ptr<Expression> value;
+
+    AssignStmt(std::string n, std::unique_ptr<Expression> v)
+        : name(std::move(n)), value(std::move(v)) {}
+};
+
 struct ReturnStmt : Statement {
     std::unique_ptr<Expression> value;
 
     explicit ReturnStmt(std::unique_ptr<Expression> v) : value(std::move(v)) {}
 };
 
-// Function definition
 struct Function {
     std::string name;
     Type return_type;
@@ -81,7 +90,6 @@ struct Function {
     Function(std::string n, Type ret) : name(std::move(n)), return_type(ret) {}
 };
 
-// Program: collection of functions
 struct Program {
     std::vector<std::unique_ptr<Function>> functions;
 };
