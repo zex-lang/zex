@@ -15,6 +15,8 @@ enum class TokenType {
     KW_BOOL,
     KW_TRUE,
     KW_FALSE,
+    KW_IF,
+    KW_ELSE,
 
     LPAREN,
     RPAREN,

@@ -129,6 +129,36 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
         }
         emitter_.emit_pop_rbp();
         emitter_.emit_ret();
+    } else if (auto* if_stmt = dynamic_cast<const IfStmt*>(stmt)) {
+        generate_expression(if_stmt->condition.get());
+        emitter_.emit_test_rax_rax();
+        emitter_.emit_jz_rel32(0);
+        size_t else_patch = emitter_.current_offset() - 4;
+
+        for (const auto& s : if_stmt->then_body) {
+            generate_statement(s.get());
+        }
+
+        if (!if_stmt->else_body.empty()) {
+            emitter_.emit_jmp_rel32(0);
+            size_t end_patch = emitter_.current_offset() - 4;
+
+            size_t else_target = emitter_.current_offset();
+            int32_t else_rel = static_cast<int32_t>(else_target - (else_patch + 4));
+            emitter_.patch_rel32(else_patch, else_rel);
+
+            for (const auto& s : if_stmt->else_body) {
+                generate_statement(s.get());
+            }
+
+            size_t end_target = emitter_.current_offset();
+            int32_t end_rel = static_cast<int32_t>(end_target - (end_patch + 4));
+            emitter_.patch_rel32(end_patch, end_rel);
+        } else {
+            size_t end_target = emitter_.current_offset();
+            int32_t else_rel = static_cast<int32_t>(end_target - (else_patch + 4));
+            emitter_.patch_rel32(else_patch, else_rel);
+        }
     }
 }
 

@@ -105,6 +105,14 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         analyze_expression(assign->value.get());
     } else if (auto* ret = dynamic_cast<ReturnStmt*>(stmt)) {
         analyze_expression(ret->value.get());
+    } else if (auto* if_stmt = dynamic_cast<IfStmt*>(stmt)) {
+        analyze_expression(if_stmt->condition.get());
+        for (auto& s : if_stmt->then_body) {
+            analyze_statement(s.get());
+        }
+        for (auto& s : if_stmt->else_body) {
+            analyze_statement(s.get());
+        }
     }
 }
 

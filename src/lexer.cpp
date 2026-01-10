@@ -24,6 +24,10 @@ const char* token_type_to_string(TokenType type) {
             return "true";
         case TokenType::KW_FALSE:
             return "false";
+        case TokenType::KW_IF:
+            return "if";
+        case TokenType::KW_ELSE:
+            return "else";
         case TokenType::LPAREN:
             return "(";
         case TokenType::RPAREN:
@@ -181,7 +185,8 @@ TokenType Lexer::check_keyword(const std::string& word) const {
         {"fun", TokenType::KW_FUN},       {"var", TokenType::KW_VAR},
         {"const", TokenType::KW_CONST},   {"return", TokenType::KW_RETURN},
         {"int", TokenType::KW_INT},       {"bool", TokenType::KW_BOOL},
-        {"true", TokenType::KW_TRUE},     {"false", TokenType::KW_FALSE}};
+        {"true", TokenType::KW_TRUE},     {"false", TokenType::KW_FALSE},
+        {"if", TokenType::KW_IF},         {"else", TokenType::KW_ELSE}};
 
     auto it = keywords.find(word);
     if (it != keywords.end()) {

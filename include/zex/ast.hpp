@@ -113,6 +113,16 @@ struct ReturnStmt : Statement {
     explicit ReturnStmt(std::unique_ptr<Expression> v) : value(std::move(v)) {}
 };
 
+struct IfStmt : Statement {
+    std::unique_ptr<Expression> condition;
+    std::vector<std::unique_ptr<Statement>> then_body;
+    std::vector<std::unique_ptr<Statement>> else_body;
+
+    IfStmt(std::unique_ptr<Expression> cond, std::vector<std::unique_ptr<Statement>> tb,
+           std::vector<std::unique_ptr<Statement>> eb)
+        : condition(std::move(cond)), then_body(std::move(tb)), else_body(std::move(eb)) {}
+};
+
 struct Function {
     std::string name;
     std::vector<Parameter> params;

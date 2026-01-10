@@ -109,10 +109,40 @@ std::unique_ptr<Statement> Parser::parse_statement() {
     if (check(TokenType::KW_RETURN)) {
         return parse_return();
     }
+    if (check(TokenType::KW_IF)) {
+        return parse_if_stmt();
+    }
     if (check(TokenType::IDENTIFIER)) {
         return parse_assign_or_expr_stmt();
     }
     throw error(ErrorCode::EXPECTED_STATEMENT);
+}
+
+std::vector<std::unique_ptr<Statement>> Parser::parse_block() {
+    expect(TokenType::LBRACE, ErrorCode::UNEXPECTED_TOKEN);
+    std::vector<std::unique_ptr<Statement>> stmts;
+    while (!check(TokenType::RBRACE) && !at_end()) {
+        stmts.push_back(parse_statement());
+    }
+    expect(TokenType::RBRACE, ErrorCode::UNEXPECTED_TOKEN);
+    return stmts;
+}
+
+std::unique_ptr<IfStmt> Parser::parse_if_stmt() {
+    expect(TokenType::KW_IF, ErrorCode::UNEXPECTED_TOKEN);
+    auto condition = parse_expression();
+    auto then_body = parse_block();
+
+    std::vector<std::unique_ptr<Statement>> else_body;
+    if (match(TokenType::KW_ELSE)) {
+        if (check(TokenType::KW_IF)) {
+            else_body.push_back(parse_if_stmt());
+        } else {
+            else_body = parse_block();
+        }
+    }
+
+    return std::make_unique<IfStmt>(std::move(condition), std::move(then_body), std::move(else_body));
 }
 
 std::unique_ptr<Statement> Parser::parse_assign_or_expr_stmt() {

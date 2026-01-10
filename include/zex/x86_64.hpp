@@ -70,6 +70,9 @@ class X86_64 {
     void emit_xor_rax_rax();
     void emit_test_rcx_rcx();
 
+    void emit_jz_rel32(int32_t offset);
+    void emit_jmp_rel32(int32_t offset);
+
     size_t current_offset() const;
     void patch_rel32(size_t pos, int32_t value);
 

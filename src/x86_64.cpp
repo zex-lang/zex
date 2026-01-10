@@ -332,4 +332,15 @@ void X86_64::emit_test_rcx_rcx() {
     emit8(0xC9);
 }
 
+void X86_64::emit_jz_rel32(int32_t offset) {
+    emit8(0x0F);
+    emit8(0x84);
+    emit32(offset);
+}
+
+void X86_64::emit_jmp_rel32(int32_t offset) {
+    emit8(0xE9);
+    emit32(offset);
+}
+
 }  // namespace zex

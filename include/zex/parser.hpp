@@ -37,6 +37,8 @@ class Parser {
     std::unique_ptr<VarDecl> parse_var_decl();
     std::unique_ptr<ConstDecl> parse_const_decl();
     std::unique_ptr<ReturnStmt> parse_return();
+    std::unique_ptr<IfStmt> parse_if_stmt();
+    std::vector<std::unique_ptr<Statement>> parse_block();
 
     std::unique_ptr<Expression> parse_expression();
     std::unique_ptr<Expression> parse_or();
