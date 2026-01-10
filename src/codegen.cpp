@@ -408,6 +408,7 @@ void CodeGenerator::resolve_calls() {
 
 Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
     switch (ar) {
+        // 64 bit
         case AsmReg::RAX:
             return Reg::RAX;
         case AsmReg::RCX:
@@ -440,6 +441,57 @@ Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
             return Reg::R14;
         case AsmReg::R15:
             return Reg::R15;
+        // 32 bit maps to same encoding
+        case AsmReg::EAX:
+            return Reg::RAX;
+        case AsmReg::ECX:
+            return Reg::RCX;
+        case AsmReg::EDX:
+            return Reg::RDX;
+        case AsmReg::EBX:
+            return Reg::RBX;
+        case AsmReg::ESP:
+            return Reg::RSP;
+        case AsmReg::EBP:
+            return Reg::RBP;
+        case AsmReg::ESI:
+            return Reg::RSI;
+        case AsmReg::EDI:
+            return Reg::RDI;
+        case AsmReg::R8D:
+            return Reg::R8;
+        case AsmReg::R9D:
+            return Reg::R9;
+        case AsmReg::R10D:
+            return Reg::R10;
+        case AsmReg::R11D:
+            return Reg::R11;
+        case AsmReg::R12D:
+            return Reg::R12;
+        case AsmReg::R13D:
+            return Reg::R13;
+        case AsmReg::R14D:
+            return Reg::R14;
+        case AsmReg::R15D:
+            return Reg::R15;
+        // 16 bit maps to same encoding
+        case AsmReg::AX:
+            return Reg::RAX;
+        case AsmReg::CX:
+            return Reg::RCX;
+        case AsmReg::DX:
+            return Reg::RDX;
+        case AsmReg::BX:
+            return Reg::RBX;
+        case AsmReg::SP:
+            return Reg::RSP;
+        case AsmReg::BP:
+            return Reg::RBP;
+        case AsmReg::SI:
+            return Reg::RSI;
+        case AsmReg::DI:
+            return Reg::RDI;
+        // 8 bit low
         case AsmReg::AL:
             return Reg::AL;
         case AsmReg::CL:
@@ -448,6 +500,15 @@ Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
             return Reg::DL;
         case AsmReg::BL:
             return Reg::BL;
+        // 8 bit high maps to same for now
+        case AsmReg::AH:
+            return Reg::RAX;
+        case AsmReg::CH:
+            return Reg::RCX;
+        case AsmReg::DH:
+            return Reg::RDX;
+        case AsmReg::BH:
+            return Reg::RBX;
     }
     return Reg::RAX;
 }

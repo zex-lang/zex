@@ -579,12 +579,57 @@ std::unique_ptr<AsmBlock> Parser::parse_asm_block() {
         {"setge", AsmOpcode::SETGE},     {"movzx", AsmOpcode::MOVZX}, {"lea", AsmOpcode::LEA},
         {"syscall", AsmOpcode::SYSCALL}, {"nop", AsmOpcode::NOP}};
 
-    static const std::unordered_map<std::string, AsmReg> registers = {
-        {"rax", AsmReg::RAX}, {"rcx", AsmReg::RCX}, {"rdx", AsmReg::RDX}, {"rbx", AsmReg::RBX},
-        {"rsp", AsmReg::RSP}, {"rbp", AsmReg::RBP}, {"rsi", AsmReg::RSI}, {"rdi", AsmReg::RDI},
-        {"r8", AsmReg::R8},   {"r9", AsmReg::R9},   {"r10", AsmReg::R10}, {"r11", AsmReg::R11},
-        {"r12", AsmReg::R12}, {"r13", AsmReg::R13}, {"r14", AsmReg::R14}, {"r15", AsmReg::R15},
-        {"al", AsmReg::AL},   {"cl", AsmReg::CL},   {"dl", AsmReg::DL},   {"bl", AsmReg::BL}};
+    static const std::unordered_map<std::string, AsmReg> registers = {{"rax", AsmReg::RAX},
+                                                                      {"rcx", AsmReg::RCX},
+                                                                      {"rdx", AsmReg::RDX},
+                                                                      {"rbx", AsmReg::RBX},
+                                                                      {"rsp", AsmReg::RSP},
+                                                                      {"rbp", AsmReg::RBP},
+                                                                      {"rsi", AsmReg::RSI},
+                                                                      {"rdi", AsmReg::RDI},
+                                                                      {"r8", AsmReg::R8},
+                                                                      {"r9", AsmReg::R9},
+                                                                      {"r10", AsmReg::R10},
+                                                                      {"r11", AsmReg::R11},
+                                                                      {"r12", AsmReg::R12},
+                                                                      {"r13", AsmReg::R13},
+                                                                      {"r14", AsmReg::R14},
+                                                                      {"r15", AsmReg::R15},
+                                                                      // 32 bit
+                                                                      {"eax", AsmReg::EAX},
+                                                                      {"ecx", AsmReg::ECX},
+                                                                      {"edx", AsmReg::EDX},
+                                                                      {"ebx", AsmReg::EBX},
+                                                                      {"esp", AsmReg::ESP},
+                                                                      {"ebp", AsmReg::EBP},
+                                                                      {"esi", AsmReg::ESI},
+                                                                      {"edi", AsmReg::EDI},
+                                                                      {"r8d", AsmReg::R8D},
+                                                                      {"r9d", AsmReg::R9D},
+                                                                      {"r10d", AsmReg::R10D},
+                                                                      {"r11d", AsmReg::R11D},
+                                                                      {"r12d", AsmReg::R12D},
+                                                                      {"r13d", AsmReg::R13D},
+                                                                      {"r14d", AsmReg::R14D},
+                                                                      {"r15d", AsmReg::R15D},
+                                                                      // 16 bit
+                                                                      {"ax", AsmReg::AX},
+                                                                      {"cx", AsmReg::CX},
+                                                                      {"dx", AsmReg::DX},
+                                                                      {"bx", AsmReg::BX},
+                                                                      {"sp", AsmReg::SP},
+                                                                      {"bp", AsmReg::BP},
+                                                                      {"si", AsmReg::SI},
+                                                                      {"di", AsmReg::DI},
+                                                                      // 8 bit
+                                                                      {"al", AsmReg::AL},
+                                                                      {"cl", AsmReg::CL},
+                                                                      {"dl", AsmReg::DL},
+                                                                      {"bl", AsmReg::BL},
+                                                                      {"ah", AsmReg::AH},
+                                                                      {"ch", AsmReg::CH},
+                                                                      {"dh", AsmReg::DH},
+                                                                      {"bh", AsmReg::BH}};
 
     while (!check(TokenType::RBRACE) && !at_end()) {
         expect(TokenType::IDENTIFIER, ErrorCode::UNEXPECTED_TOKEN);

@@ -290,6 +290,7 @@ enum class AsmOperandKind { REG, IMM, MEM, VAR };
 
 // Register encoding for asm operands
 enum class AsmReg : uint8_t {
+    // 64 bit registers
     RAX = 0,
     RCX = 1,
     RDX = 2,
@@ -306,10 +307,46 @@ enum class AsmReg : uint8_t {
     R13 = 13,
     R14 = 14,
     R15 = 15,
+
+    // 32 bit registers
+    EAX = 20,
+    ECX = 21,
+    EDX = 22,
+    EBX = 23,
+    ESP = 24,
+    EBP = 25,
+    ESI = 26,
+    EDI = 27,
+    R8D = 28,
+    R9D = 29,
+    R10D = 30,
+    R11D = 31,
+    R12D = 32,
+    R13D = 33,
+    R14D = 34,
+    R15D = 35,
+
+    // 16 bit registers
+    AX = 40,
+    CX = 41,
+    DX = 42,
+    BX = 43,
+    SP = 44,
+    BP = 45,
+    SI = 46,
+    DI = 47,
+
+    // 8 bit low registers
     AL = 100,
     CL = 101,
     DL = 102,
-    BL = 103
+    BL = 103,
+
+    // 8 bit high registers
+    AH = 104,
+    CH = 105,
+    DH = 106,
+    BH = 107
 };
 
 // Single operand in an assembly instruction
