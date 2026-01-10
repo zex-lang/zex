@@ -22,6 +22,7 @@ void CodeGenerator::generate(const Program& program) {
     }
 
     resolve_calls();
+    emit_string_literals();
 
     auto it = function_offsets_.find("main");
     if (it != function_offsets_.end()) {
@@ -197,20 +198,38 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
 }
 
 size_t CodeGenerator::add_string_literal(const std::string& str) {
-    for (const auto& sl : string_literals_) {
-        if (sl.value == str) {
-            return sl.offset;
+    // Check if string already exists
+    for (size_t i = 0; i < string_literals_.size(); i++) {
+        if (string_literals_[i].value == str) {
+            return i;
         }
     }
 
-    size_t offset = emitter_.current_offset();
-    for (char c : str) {
-        emitter_.code().push_back(static_cast<uint8_t>(c));
-    }
-    emitter_.code().push_back(0);
+    // Add new string with placeholder offset
+    size_t index = string_literals_.size();
+    string_literals_.push_back({str, 0});
+    return index;
+}
 
-    string_literals_.push_back({str, offset});
-    return offset;
+void CodeGenerator::emit_string_literals() {
+    // Append all strings at end of code section
+    for (auto& sl : string_literals_) {
+        sl.offset = emitter_.current_offset();
+        for (char c : sl.value) {
+            emitter_.code().push_back(static_cast<uint8_t>(c));
+        }
+        emitter_.code().push_back(0);
+    }
+
+    // Patch all string address references
+    for (const auto& patch : string_patches_) {
+        int64_t addr =
+            0x400000 + 120 + static_cast<int64_t>(string_literals_[patch.string_index].offset);
+        for (int i = 0; i < 8; i++) {
+            emitter_.code()[patch.patch_location + i] =
+                static_cast<uint8_t>((addr >> (i * 8)) & 0xFF);
+        }
+    }
 }
 
 void CodeGenerator::generate_expression(const Expression* expr) {
@@ -224,8 +243,11 @@ void CodeGenerator::generate_expression(const Expression* expr) {
     } else if (auto* cl = dynamic_cast<const CharLiteral*>(expr)) {
         emitter_.mov(Reg::RAX, static_cast<int64_t>(cl->value));
     } else if (auto* sl = dynamic_cast<const StringLiteral*>(expr)) {
-        size_t str_offset = add_string_literal(sl->value);
-        emitter_.mov(Reg::RAX, static_cast<int64_t>(str_offset));
+        size_t str_index = add_string_literal(sl->value);
+        // Emit mov with placeholder, record patch location
+        size_t patch_loc = emitter_.current_offset() + 2;
+        emitter_.mov(Reg::RAX, static_cast<int64_t>(0));
+        string_patches_.push_back({patch_loc, str_index});
     } else if (auto* bl = dynamic_cast<const BoolLiteral*>(expr)) {
         emitter_.mov(Reg::RAX, bl->value ? static_cast<int64_t>(1) : static_cast<int64_t>(0));
     } else if (auto* sz = dynamic_cast<const SizeofExpr*>(expr)) {

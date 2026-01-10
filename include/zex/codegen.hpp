@@ -34,6 +34,12 @@ struct StringLiteralData {
     size_t offset;
 };
 
+// Pending string address patch
+struct StringPatch {
+    size_t patch_location;
+    size_t string_index;
+};
+
 // Generates x86_64 machine code from the AST
 class CodeGenerator {
    public:
@@ -59,6 +65,7 @@ class CodeGenerator {
     std::unordered_map<std::string, size_t> function_offsets_;
     std::vector<CallPatch> call_patches_;
     std::vector<StringLiteralData> string_literals_;
+    std::vector<StringPatch> string_patches_;
 
     std::unordered_map<std::string, LocalVar> locals_;
     int32_t stack_size_;
@@ -69,6 +76,7 @@ class CodeGenerator {
     void generate_expression(const Expression* expr);
     void generate_asm_block(const AsmBlock* block);
     void resolve_calls();
+    void emit_string_literals();
     int32_t calculate_stack_size(const Function& func);
     size_t add_string_literal(const std::string& str);
     Reg asm_reg_to_reg(AsmReg ar);
