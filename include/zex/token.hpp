@@ -12,6 +12,9 @@ enum class TokenType {
     KW_CONST,
     KW_RETURN,
     KW_INT,
+    KW_BOOL,
+    KW_TRUE,
+    KW_FALSE,
 
     LPAREN,
     RPAREN,
@@ -28,6 +31,17 @@ enum class TokenType {
     STAR,
     SLASH,
     PERCENT,
+    BANG,
+
+    EQ,
+    NE,
+    LT,
+    GT,
+    LE,
+    GE,
+
+    AND,
+    OR,
 
     PLUS_ASSIGN,
     MINUS_ASSIGN,

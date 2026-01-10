@@ -39,8 +39,13 @@ class Parser {
     std::unique_ptr<ReturnStmt> parse_return();
 
     std::unique_ptr<Expression> parse_expression();
+    std::unique_ptr<Expression> parse_or();
+    std::unique_ptr<Expression> parse_and();
+    std::unique_ptr<Expression> parse_equality();
+    std::unique_ptr<Expression> parse_comparison();
     std::unique_ptr<Expression> parse_additive();
     std::unique_ptr<Expression> parse_multiplicative();
+    std::unique_ptr<Expression> parse_unary();
     std::unique_ptr<Expression> parse_primary();
     std::vector<std::unique_ptr<Expression>> parse_arguments();
 

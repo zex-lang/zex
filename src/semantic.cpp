@@ -113,6 +113,10 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
         return;
     }
 
+    if (dynamic_cast<BoolLiteral*>(expr)) {
+        return;
+    }
+
     if (auto* ident = dynamic_cast<Identifier*>(expr)) {
         if (local_variables_.find(ident->name) == local_variables_.end()) {
             throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, ident->name);
@@ -127,6 +131,11 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
         for (auto& arg : call->args) {
             analyze_expression(arg.get());
         }
+        return;
+    }
+
+    if (auto* unary = dynamic_cast<UnaryExpr*>(expr)) {
+        analyze_expression(unary->operand.get());
         return;
     }
 

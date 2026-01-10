@@ -174,46 +174,114 @@ std::unique_ptr<ReturnStmt> Parser::parse_return() {
 }
 
 std::unique_ptr<Expression> Parser::parse_expression() {
-    return parse_additive();
+    return parse_or();
+}
+
+std::unique_ptr<Expression> Parser::parse_or() {
+    auto left = parse_and();
+    while (match(TokenType::OR)) {
+        auto right = parse_and();
+        left = std::make_unique<BinaryExpr>(BinaryOp::OR, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<Expression> Parser::parse_and() {
+    auto left = parse_equality();
+    while (match(TokenType::AND)) {
+        auto right = parse_equality();
+        left = std::make_unique<BinaryExpr>(BinaryOp::AND, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<Expression> Parser::parse_equality() {
+    auto left = parse_comparison();
+    while (check(TokenType::EQ) || check(TokenType::NE)) {
+        BinaryOp op = check(TokenType::EQ) ? BinaryOp::EQ : BinaryOp::NE;
+        advance();
+        auto right = parse_comparison();
+        left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<Expression> Parser::parse_comparison() {
+    auto left = parse_additive();
+    while (check(TokenType::LT) || check(TokenType::GT) || check(TokenType::LE) ||
+           check(TokenType::GE)) {
+        BinaryOp op;
+        if (check(TokenType::LT))
+            op = BinaryOp::LT;
+        else if (check(TokenType::GT))
+            op = BinaryOp::GT;
+        else if (check(TokenType::LE))
+            op = BinaryOp::LE;
+        else
+            op = BinaryOp::GE;
+        advance();
+        auto right = parse_additive();
+        left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
 }
 
 std::unique_ptr<Expression> Parser::parse_additive() {
     auto left = parse_multiplicative();
-
     while (check(TokenType::PLUS) || check(TokenType::MINUS)) {
         BinaryOp op = check(TokenType::PLUS) ? BinaryOp::ADD : BinaryOp::SUB;
         advance();
         auto right = parse_multiplicative();
         left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
     }
-
     return left;
 }
 
 std::unique_ptr<Expression> Parser::parse_multiplicative() {
-    auto left = parse_primary();
-
+    auto left = parse_unary();
     while (check(TokenType::STAR) || check(TokenType::SLASH) || check(TokenType::PERCENT)) {
         BinaryOp op;
-        if (check(TokenType::STAR)) {
+        if (check(TokenType::STAR))
             op = BinaryOp::MUL;
-        } else if (check(TokenType::SLASH)) {
+        else if (check(TokenType::SLASH))
             op = BinaryOp::DIV;
-        } else {
+        else
             op = BinaryOp::MOD;
-        }
         advance();
-        auto right = parse_primary();
+        auto right = parse_unary();
         left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
     }
-
     return left;
+}
+
+std::unique_ptr<Expression> Parser::parse_unary() {
+    if (match(TokenType::MINUS)) {
+        auto operand = parse_unary();
+        return std::make_unique<UnaryExpr>(UnaryOp::NEG, std::move(operand));
+    }
+    if (match(TokenType::PLUS)) {
+        auto operand = parse_unary();
+        return std::make_unique<UnaryExpr>(UnaryOp::POS, std::move(operand));
+    }
+    if (match(TokenType::BANG)) {
+        auto operand = parse_unary();
+        return std::make_unique<UnaryExpr>(UnaryOp::NOT, std::move(operand));
+    }
+    return parse_primary();
 }
 
 std::unique_ptr<Expression> Parser::parse_primary() {
     if (match(TokenType::INT_LITERAL)) {
         int64_t value = std::stoll(previous().value);
         return std::make_unique<IntLiteral>(value);
+    }
+
+    if (match(TokenType::KW_TRUE)) {
+        return std::make_unique<BoolLiteral>(true);
+    }
+
+    if (match(TokenType::KW_FALSE)) {
+        return std::make_unique<BoolLiteral>(false);
     }
 
     if (match(TokenType::IDENTIFIER)) {
@@ -240,6 +308,9 @@ Type Parser::parse_type() {
     if (match(TokenType::KW_INT)) {
         return Type(TypeKind::INT);
     }
+    if (match(TokenType::KW_BOOL)) {
+        return Type(TypeKind::BOOL);
+    }
     throw error(ErrorCode::EXPECTED_TYPE);
 }
 
@@ -263,6 +334,22 @@ int64_t Parser::eval_const_expr(Expression* expr) {
         return lit->value;
     }
 
+    if (auto* bl = dynamic_cast<BoolLiteral*>(expr)) {
+        return bl->value ? 1 : 0;
+    }
+
+    if (auto* unary = dynamic_cast<UnaryExpr*>(expr)) {
+        int64_t val = eval_const_expr(unary->operand.get());
+        switch (unary->op) {
+            case UnaryOp::NEG:
+                return -val;
+            case UnaryOp::POS:
+                return val;
+            case UnaryOp::NOT:
+                return val == 0 ? 1 : 0;
+        }
+    }
+
     if (auto* binary = dynamic_cast<BinaryExpr*>(expr)) {
         int64_t left = eval_const_expr(binary->left.get());
         int64_t right = eval_const_expr(binary->right.get());
@@ -277,6 +364,22 @@ int64_t Parser::eval_const_expr(Expression* expr) {
                 return left / right;
             case BinaryOp::MOD:
                 return left % right;
+            case BinaryOp::EQ:
+                return left == right ? 1 : 0;
+            case BinaryOp::NE:
+                return left != right ? 1 : 0;
+            case BinaryOp::LT:
+                return left < right ? 1 : 0;
+            case BinaryOp::GT:
+                return left > right ? 1 : 0;
+            case BinaryOp::LE:
+                return left <= right ? 1 : 0;
+            case BinaryOp::GE:
+                return left >= right ? 1 : 0;
+            case BinaryOp::AND:
+                return (left != 0 && right != 0) ? 1 : 0;
+            case BinaryOp::OR:
+                return (left != 0 || right != 0) ? 1 : 0;
         }
     }
 

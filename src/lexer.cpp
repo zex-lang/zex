@@ -18,6 +18,12 @@ const char* token_type_to_string(TokenType type) {
             return "return";
         case TokenType::KW_INT:
             return "int";
+        case TokenType::KW_BOOL:
+            return "bool";
+        case TokenType::KW_TRUE:
+            return "true";
+        case TokenType::KW_FALSE:
+            return "false";
         case TokenType::LPAREN:
             return "(";
         case TokenType::RPAREN:
@@ -46,6 +52,24 @@ const char* token_type_to_string(TokenType type) {
             return "/";
         case TokenType::PERCENT:
             return "%";
+        case TokenType::BANG:
+            return "!";
+        case TokenType::EQ:
+            return "==";
+        case TokenType::NE:
+            return "!=";
+        case TokenType::LT:
+            return "<";
+        case TokenType::GT:
+            return ">";
+        case TokenType::LE:
+            return "<=";
+        case TokenType::GE:
+            return ">=";
+        case TokenType::AND:
+            return "&&";
+        case TokenType::OR:
+            return "||";
         case TokenType::PLUS_ASSIGN:
             return "+=";
         case TokenType::MINUS_ASSIGN:
@@ -154,11 +178,10 @@ bool Lexer::is_alnum(char c) const {
 
 TokenType Lexer::check_keyword(const std::string& word) const {
     static const std::unordered_map<std::string, TokenType> keywords = {
-        {"fun", TokenType::KW_FUN},
-        {"var", TokenType::KW_VAR},
-        {"const", TokenType::KW_CONST},
-        {"return", TokenType::KW_RETURN},
-        {"int", TokenType::KW_INT}};
+        {"fun", TokenType::KW_FUN},       {"var", TokenType::KW_VAR},
+        {"const", TokenType::KW_CONST},   {"return", TokenType::KW_RETURN},
+        {"int", TokenType::KW_INT},       {"bool", TokenType::KW_BOOL},
+        {"true", TokenType::KW_TRUE},     {"false", TokenType::KW_FALSE}};
 
     auto it = keywords.find(word);
     if (it != keywords.end()) {
@@ -265,9 +288,56 @@ Token Lexer::scan_token() {
         return make_token(TokenType::PERCENT);
     }
 
+    if (c == '=' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::EQ);
+    }
     if (c == '=') {
         advance();
         return make_token(TokenType::ASSIGN);
+    }
+
+    if (c == '!' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::NE);
+    }
+    if (c == '!') {
+        advance();
+        return make_token(TokenType::BANG);
+    }
+
+    if (c == '<' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::LE);
+    }
+    if (c == '<') {
+        advance();
+        return make_token(TokenType::LT);
+    }
+
+    if (c == '>' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::GE);
+    }
+    if (c == '>') {
+        advance();
+        return make_token(TokenType::GT);
+    }
+
+    if (c == '&' && peek() == '&') {
+        advance();
+        advance();
+        return make_token(TokenType::AND);
+    }
+
+    if (c == '|' && peek() == '|') {
+        advance();
+        advance();
+        return make_token(TokenType::OR);
     }
 
     if (c == '-' && peek() == '>') {

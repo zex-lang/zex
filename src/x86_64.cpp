@@ -253,4 +253,83 @@ void X86_64::emit_mov_rax_rdx() {
     emit8(0xD0);
 }
 
+void X86_64::emit_neg_rax() {
+    emit8(0x48);
+    emit8(0xF7);
+    emit8(0xD8);
+}
+
+void X86_64::emit_cmp_rax_rcx() {
+    emit8(0x48);
+    emit8(0x39);
+    emit8(0xC8);
+}
+
+void X86_64::emit_sete_al() {
+    emit8(0x0F);
+    emit8(0x94);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setne_al() {
+    emit8(0x0F);
+    emit8(0x95);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setl_al() {
+    emit8(0x0F);
+    emit8(0x9C);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setg_al() {
+    emit8(0x0F);
+    emit8(0x9F);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setle_al() {
+    emit8(0x0F);
+    emit8(0x9E);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setge_al() {
+    emit8(0x0F);
+    emit8(0x9D);
+    emit8(0xC0);
+}
+
+void X86_64::emit_movzx_rax_al() {
+    emit8(0x48);
+    emit8(0x0F);
+    emit8(0xB6);
+    emit8(0xC0);
+}
+
+void X86_64::emit_test_rax_rax() {
+    emit8(0x48);
+    emit8(0x85);
+    emit8(0xC0);
+}
+
+void X86_64::emit_setz_al() {
+    emit8(0x0F);
+    emit8(0x94);
+    emit8(0xC0);
+}
+
+void X86_64::emit_xor_rax_rax() {
+    emit8(0x48);
+    emit8(0x31);
+    emit8(0xC0);
+}
+
+void X86_64::emit_test_rcx_rcx() {
+    emit8(0x48);
+    emit8(0x85);
+    emit8(0xC9);
+}
+
 }  // namespace zex

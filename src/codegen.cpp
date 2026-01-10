@@ -135,12 +135,28 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
 void CodeGenerator::generate_expression(const Expression* expr) {
     if (auto* lit = dynamic_cast<const IntLiteral*>(expr)) {
         emitter_.emit_mov_rax_imm64(lit->value);
+    } else if (auto* bl = dynamic_cast<const BoolLiteral*>(expr)) {
+        emitter_.emit_mov_rax_imm64(bl->value ? 1 : 0);
     } else if (auto* ident = dynamic_cast<const Identifier*>(expr)) {
         const LocalVar& lv = locals_[ident->name];
         if (lv.is_const) {
             emitter_.emit_mov_rax_imm64(lv.const_value);
         } else {
             emitter_.emit_mov_rax_rbp_offset(lv.stack_offset);
+        }
+    } else if (auto* unary = dynamic_cast<const UnaryExpr*>(expr)) {
+        generate_expression(unary->operand.get());
+        switch (unary->op) {
+            case UnaryOp::NEG:
+                emitter_.emit_neg_rax();
+                break;
+            case UnaryOp::POS:
+                break;
+            case UnaryOp::NOT:
+                emitter_.emit_test_rax_rax();
+                emitter_.emit_setz_al();
+                emitter_.emit_movzx_rax_al();
+                break;
         }
     } else if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
         for (size_t i = call->args.size(); i > 0; i--) {
@@ -177,6 +193,36 @@ void CodeGenerator::generate_expression(const Expression* expr) {
         patch.target = call->callee;
         call_patches_.push_back(patch);
     } else if (auto* binary = dynamic_cast<const BinaryExpr*>(expr)) {
+        if (binary->op == BinaryOp::AND) {
+            generate_expression(binary->left.get());
+            emitter_.emit_test_rax_rax();
+            emitter_.emit_setne_al();
+            emitter_.emit_movzx_rax_al();
+            emitter_.emit_push_rax();
+            generate_expression(binary->right.get());
+            emitter_.emit_test_rax_rax();
+            emitter_.emit_setne_al();
+            emitter_.emit_movzx_rax_al();
+            emitter_.emit_pop_rcx();
+            emitter_.emit_test_rax_rax();
+            emitter_.emit_setne_al();
+            emitter_.emit_movzx_rax_al();
+            emitter_.emit_imul_rax_rcx();
+            return;
+        }
+
+        if (binary->op == BinaryOp::OR) {
+            generate_expression(binary->left.get());
+            emitter_.emit_push_rax();
+            generate_expression(binary->right.get());
+            emitter_.emit_pop_rcx();
+            emitter_.emit_add_rax_rcx();
+            emitter_.emit_test_rax_rax();
+            emitter_.emit_setne_al();
+            emitter_.emit_movzx_rax_al();
+            return;
+        }
+
         generate_expression(binary->right.get());
         emitter_.emit_push_rax();
         generate_expression(binary->left.get());
@@ -200,6 +246,39 @@ void CodeGenerator::generate_expression(const Expression* expr) {
                 emitter_.emit_cqo();
                 emitter_.emit_idiv_rcx();
                 emitter_.emit_mov_rax_rdx();
+                break;
+            case BinaryOp::EQ:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_sete_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::NE:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_setne_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::LT:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_setl_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::GT:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_setg_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::LE:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_setle_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::GE:
+                emitter_.emit_cmp_rax_rcx();
+                emitter_.emit_setge_al();
+                emitter_.emit_movzx_rax_al();
+                break;
+            case BinaryOp::AND:
+            case BinaryOp::OR:
                 break;
         }
     }

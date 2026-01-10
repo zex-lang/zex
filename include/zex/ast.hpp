@@ -13,7 +13,7 @@ struct Statement;
 struct Function;
 struct Program;
 
-enum class TypeKind { INT };
+enum class TypeKind { INT, BOOL };
 
 struct Type {
     TypeKind kind;
@@ -22,7 +22,9 @@ struct Type {
     explicit Type(TypeKind k) : kind(k) {}
 };
 
-enum class BinaryOp { ADD, SUB, MUL, DIV, MOD };
+enum class BinaryOp { ADD, SUB, MUL, DIV, MOD, EQ, NE, LT, GT, LE, GE, AND, OR };
+
+enum class UnaryOp { NEG, NOT, POS };
 
 struct Parameter {
     std::string name;
@@ -41,6 +43,12 @@ struct IntLiteral : Expression {
     explicit IntLiteral(int64_t v) : value(v) {}
 };
 
+struct BoolLiteral : Expression {
+    bool value;
+
+    explicit BoolLiteral(bool v) : value(v) {}
+};
+
 struct Identifier : Expression {
     std::string name;
 
@@ -52,6 +60,13 @@ struct CallExpr : Expression {
     std::vector<std::unique_ptr<Expression>> args;
 
     explicit CallExpr(std::string name) : callee(std::move(name)) {}
+};
+
+struct UnaryExpr : Expression {
+    UnaryOp op;
+    std::unique_ptr<Expression> operand;
+
+    UnaryExpr(UnaryOp o, std::unique_ptr<Expression> e) : op(o), operand(std::move(e)) {}
 };
 
 struct BinaryExpr : Expression {

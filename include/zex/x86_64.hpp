@@ -55,6 +55,21 @@ class X86_64 {
     void emit_idiv_rcx();
     void emit_mov_rax_rdx();
 
+    void emit_neg_rax();
+    void emit_cmp_rax_rcx();
+    void emit_sete_al();
+    void emit_setne_al();
+    void emit_setl_al();
+    void emit_setg_al();
+    void emit_setle_al();
+    void emit_setge_al();
+    void emit_movzx_rax_al();
+    void emit_test_rax_rax();
+    void emit_setz_al();
+
+    void emit_xor_rax_rax();
+    void emit_test_rcx_rcx();
+
     size_t current_offset() const;
     void patch_rel32(size_t pos, int32_t value);
 
