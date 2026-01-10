@@ -40,12 +40,14 @@ bool Parser::match(TokenType type) {
 
 CompileError Parser::error(ErrorCode code) {
     const Token& tok = peek();
-    return CompileError(code, {tok.line, tok.column}, tok.value);
+    std::string ctx = tok.value + " [" + token_type_to_string(tok.type) + "]";
+    return CompileError(code, {tok.line, tok.column}, ctx);
 }
 
 CompileError Parser::error(ErrorCode code, const std::string& ctx) {
     const Token& tok = peek();
-    return CompileError(code, {tok.line, tok.column}, ctx);
+    std::string full_ctx = ctx + " [" + token_type_to_string(tok.type) + "]";
+    return CompileError(code, {tok.line, tok.column}, full_ctx);
 }
 
 void Parser::expect(TokenType type, ErrorCode err_code) {

@@ -263,6 +263,45 @@ Token Lexer::scan_identifier() {
 Token Lexer::scan_number() {
     size_t start = pos_;
     uint32_t start_col = column_;
+
+    // Check for hex, octal, binary prefixes
+    if (current() == '0' && !at_end()) {
+        char next = peek();
+        if (next == 'x' || next == 'X') {
+            // Hex literal
+            advance();
+            advance();
+            while (!at_end() && (is_digit(current()) || (current() >= 'a' && current() <= 'f') ||
+                                 (current() >= 'A' && current() <= 'F'))) {
+                advance();
+            }
+            std::string hex_str(source_.substr(start, pos_ - start));
+            int64_t value = std::stoll(hex_str, nullptr, 16);
+            return Token(TokenType::INT_LITERAL, std::to_string(value), line_, start_col);
+        } else if (next == 'o' || next == 'O') {
+            // Octal literal
+            advance();
+            advance();
+            while (!at_end() && current() >= '0' && current() <= '7') {
+                advance();
+            }
+            std::string oct_str(source_.substr(start, pos_ - start));
+            int64_t value = std::stoll(oct_str.substr(2), nullptr, 8);
+            return Token(TokenType::INT_LITERAL, std::to_string(value), line_, start_col);
+        } else if (next == 'b' || next == 'B') {
+            // Binary literal
+            advance();
+            advance();
+            while (!at_end() && (current() == '0' || current() == '1')) {
+                advance();
+            }
+            std::string bin_str(source_.substr(start, pos_ - start));
+            int64_t value = std::stoll(bin_str.substr(2), nullptr, 2);
+            return Token(TokenType::INT_LITERAL, std::to_string(value), line_, start_col);
+        }
+    }
+
+    // Regular decimal number
     while (!at_end() && is_digit(current())) {
         advance();
     }
