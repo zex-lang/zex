@@ -27,6 +27,12 @@ enum class TokenType {
     SLASH,
     PERCENT,
 
+    PLUS_ASSIGN,
+    MINUS_ASSIGN,
+    STAR_ASSIGN,
+    SLASH_ASSIGN,
+    PERCENT_ASSIGN,
+
     IDENTIFIER,
     INT_LITERAL,
 

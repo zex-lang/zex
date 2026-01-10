@@ -42,6 +42,16 @@ const char* token_type_to_string(TokenType type) {
             return "/";
         case TokenType::PERCENT:
             return "%";
+        case TokenType::PLUS_ASSIGN:
+            return "+=";
+        case TokenType::MINUS_ASSIGN:
+            return "-=";
+        case TokenType::STAR_ASSIGN:
+            return "*=";
+        case TokenType::SLASH_ASSIGN:
+            return "/=";
+        case TokenType::PERCENT_ASSIGN:
+            return "%=";
         case TokenType::IDENTIFIER:
             return "identifier";
         case TokenType::INT_LITERAL:
@@ -205,31 +215,61 @@ Token Lexer::scan_token() {
         advance();
         return make_token(TokenType::SEMICOLON);
     }
-    if (c == '=') {
+
+    if (c == '+' && peek() == '=') {
         advance();
-        return make_token(TokenType::ASSIGN);
+        advance();
+        return make_token(TokenType::PLUS_ASSIGN);
     }
     if (c == '+') {
         advance();
         return make_token(TokenType::PLUS);
     }
+
+    if (c == '*' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::STAR_ASSIGN);
+    }
     if (c == '*') {
         advance();
         return make_token(TokenType::STAR);
     }
+
+    if (c == '/' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::SLASH_ASSIGN);
+    }
     if (c == '/') {
         advance();
         return make_token(TokenType::SLASH);
+    }
+
+    if (c == '%' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::PERCENT_ASSIGN);
     }
     if (c == '%') {
         advance();
         return make_token(TokenType::PERCENT);
     }
 
+    if (c == '=') {
+        advance();
+        return make_token(TokenType::ASSIGN);
+    }
+
     if (c == '-' && peek() == '>') {
         advance();
         advance();
         return make_token(TokenType::ARROW);
+    }
+    if (c == '-' && peek() == '=') {
+        advance();
+        advance();
+        return make_token(TokenType::MINUS_ASSIGN);
     }
     if (c == '-') {
         advance();

@@ -98,11 +98,37 @@ std::unique_ptr<Statement> Parser::parse_assign_or_expr_stmt() {
     expect(TokenType::IDENTIFIER, ErrorCode::EXPECTED_IDENTIFIER);
     std::string name = previous().value;
 
-    expect(TokenType::ASSIGN, ErrorCode::UNEXPECTED_TOKEN);
-    auto value = parse_expression();
-    expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
+    if (match(TokenType::ASSIGN)) {
+        auto value = parse_expression();
+        expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
+        return std::make_unique<AssignStmt>(name, std::move(value));
+    }
 
-    return std::make_unique<AssignStmt>(name, std::move(value));
+    BinaryOp op;
+    bool is_compound = true;
+    if (match(TokenType::PLUS_ASSIGN)) {
+        op = BinaryOp::ADD;
+    } else if (match(TokenType::MINUS_ASSIGN)) {
+        op = BinaryOp::SUB;
+    } else if (match(TokenType::STAR_ASSIGN)) {
+        op = BinaryOp::MUL;
+    } else if (match(TokenType::SLASH_ASSIGN)) {
+        op = BinaryOp::DIV;
+    } else if (match(TokenType::PERCENT_ASSIGN)) {
+        op = BinaryOp::MOD;
+    } else {
+        is_compound = false;
+    }
+
+    if (is_compound) {
+        auto rhs = parse_expression();
+        expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
+        auto ident = std::make_unique<Identifier>(name);
+        auto binary = std::make_unique<BinaryExpr>(op, std::move(ident), std::move(rhs));
+        return std::make_unique<AssignStmt>(name, std::move(binary));
+    }
+
+    throw error(ErrorCode::UNEXPECTED_TOKEN);
 }
 
 std::unique_ptr<VarDecl> Parser::parse_var_decl() {
