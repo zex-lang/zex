@@ -48,6 +48,7 @@ class Parser {
     std::unique_ptr<Expression> parse_additive();
     std::unique_ptr<Expression> parse_multiplicative();
     std::unique_ptr<Expression> parse_unary();
+    std::unique_ptr<Expression> parse_postfix();
     std::unique_ptr<Expression> parse_primary();
     std::vector<std::unique_ptr<Expression>> parse_arguments();
 

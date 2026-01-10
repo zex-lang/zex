@@ -103,8 +103,13 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
             throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, assign->name);
         }
         analyze_expression(assign->value.get());
+    } else if (auto* idx_assign = dynamic_cast<IndexAssignStmt*>(stmt)) {
+        analyze_expression(idx_assign->target.get());
+        analyze_expression(idx_assign->value.get());
     } else if (auto* ret = dynamic_cast<ReturnStmt*>(stmt)) {
-        analyze_expression(ret->value.get());
+        if (ret->value) {
+            analyze_expression(ret->value.get());
+        }
     } else if (auto* if_stmt = dynamic_cast<IfStmt*>(stmt)) {
         analyze_expression(if_stmt->condition.get());
         for (auto& s : if_stmt->then_body) {
@@ -121,7 +126,36 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
         return;
     }
 
+    if (dynamic_cast<FloatLiteral*>(expr)) {
+        return;
+    }
+
+    if (dynamic_cast<CharLiteral*>(expr)) {
+        return;
+    }
+
+    if (dynamic_cast<StringLiteral*>(expr)) {
+        return;
+    }
+
     if (dynamic_cast<BoolLiteral*>(expr)) {
+        return;
+    }
+
+    if (dynamic_cast<SizeofExpr*>(expr)) {
+        return;
+    }
+
+    if (auto* arr_lit = dynamic_cast<ArrayLiteral*>(expr)) {
+        for (auto& elem : arr_lit->elements) {
+            analyze_expression(elem.get());
+        }
+        return;
+    }
+
+    if (auto* idx = dynamic_cast<IndexExpr*>(expr)) {
+        analyze_expression(idx->array.get());
+        analyze_expression(idx->index.get());
         return;
     }
 

@@ -7,20 +7,15 @@ void X86_64::emit8(uint8_t byte) {
 }
 
 void X86_64::emit32(int32_t value) {
-    code_.push_back(static_cast<uint8_t>(value & 0xFF));
-    code_.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
-    code_.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
-    code_.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+    emit8(static_cast<uint8_t>(value & 0xFF));
+    emit8(static_cast<uint8_t>((value >> 8) & 0xFF));
+    emit8(static_cast<uint8_t>((value >> 16) & 0xFF));
+    emit8(static_cast<uint8_t>((value >> 24) & 0xFF));
 }
 
 void X86_64::emit64(int64_t value) {
-    for (int i = 0; i < 8; i++) {
-        code_.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF));
-    }
-}
-
-size_t X86_64::current_offset() const {
-    return code_.size();
+    emit32(static_cast<int32_t>(value & 0xFFFFFFFF));
+    emit32(static_cast<int32_t>((value >> 32) & 0xFFFFFFFF));
 }
 
 void X86_64::patch_rel32(size_t pos, int32_t value) {
@@ -30,317 +25,316 @@ void X86_64::patch_rel32(size_t pos, int32_t value) {
     code_[pos + 3] = static_cast<uint8_t>((value >> 24) & 0xFF);
 }
 
-void X86_64::emit_push_rbp() {
-    emit8(0x55);
+void X86_64::emit_rex(bool w, Reg reg, Reg rm) {
+    uint8_t rex = 0x40;
+    if (w)
+        rex |= 0x08;  // REX.W
+    if (needs_rex_r(reg))
+        rex |= 0x04;  // REX.R
+    if (needs_rex_r(rm))
+        rex |= 0x01;  // REX.B
+    if (rex != 0x40 || w)
+        emit8(rex);
 }
 
-void X86_64::emit_mov_rbp_rsp() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xE5);
+void X86_64::emit_rex(bool w, uint8_t reg, Reg rm) {
+    uint8_t rex = 0x40;
+    if (w)
+        rex |= 0x08;
+    if (reg >= 8)
+        rex |= 0x04;
+    if (needs_rex_r(rm))
+        rex |= 0x01;
+    if (rex != 0x40 || w)
+        emit8(rex);
 }
 
-void X86_64::emit_pop_rbp() {
-    emit8(0x5D);
+void X86_64::emit_rex_single(bool w, Reg rm) {
+    uint8_t rex = 0x40;
+    if (w)
+        rex |= 0x08;
+    if (needs_rex_r(rm))
+        rex |= 0x01;
+    if (rex != 0x40 || w)
+        emit8(rex);
 }
 
-void X86_64::emit_ret() {
-    emit8(0xC3);
+void X86_64::emit_modrm(uint8_t mod, uint8_t reg, uint8_t rm) {
+    emit8((mod << 6) | ((reg & 0x07) << 3) | (rm & 0x07));
 }
 
-void X86_64::emit_sub_rsp_imm8(uint8_t imm) {
-    emit8(0x48);
-    emit8(0x83);
-    emit8(0xEC);
-    emit8(imm);
+void X86_64::emit_modrm_reg(Reg reg, Reg rm) {
+    emit_modrm(0b11, reg_num(reg), reg_num(rm));
 }
 
-void X86_64::emit_add_rsp_imm8(uint8_t imm) {
-    emit8(0x48);
-    emit8(0x83);
-    emit8(0xC4);
-    emit8(imm);
+void X86_64::emit_modrm_mem(Reg reg, Mem mem) {
+    int32_t offset = mem.offset;
+    uint8_t base = reg_num(mem.base);
+    uint8_t r = reg_num(reg);
+
+    if (offset == 0 && base != 5) {  // RBP needs offset
+        emit_modrm(0b00, r, base);
+    } else if (offset >= -128 && offset <= 127) {
+        emit_modrm(0b01, r, base);
+        emit8(static_cast<uint8_t>(offset));
+    } else {
+        emit_modrm(0b10, r, base);
+        emit32(offset);
+    }
 }
 
-void X86_64::emit_mov_rax_imm64(int64_t imm) {
-    emit8(0x48);
-    emit8(0xB8);
+void X86_64::mov(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x89);  // MOV r/m64, r64
+    emit_modrm_reg(src, dst);
+}
+
+void X86_64::mov(Reg dst, int64_t imm) {
+    emit_rex_single(true, dst);
+    emit8(0xB8 + reg_num(dst));  // MOV r64, imm64
     emit64(imm);
 }
 
-void X86_64::emit_mov_rax_rbp_offset(int32_t offset) {
-    emit8(0x48);
-    emit8(0x8B);
-    emit8(0x45);
-
-    if (offset >= -128 && offset <= 127) {
-        emit8(static_cast<uint8_t>(offset));
-    } else {
-        code_.back() = 0x85;
-        emit32(offset);
+void X86_64::mov(Reg dst, int32_t imm) {
+    if (needs_rex_r(dst)) {
+        emit8(0x41);
     }
-}
-
-void X86_64::emit_mov_rbp_offset_rax(int32_t offset) {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0x45);
-
-    if (offset >= -128 && offset <= 127) {
-        emit8(static_cast<uint8_t>(offset));
-    } else {
-        code_.back() = 0x85;
-        emit32(offset);
-    }
-}
-
-void X86_64::emit_call_rel32(int32_t offset) {
-    emit8(0xE8);
-    emit32(offset);
-}
-
-void X86_64::emit_mov_rax_imm32(int32_t imm) {
-    emit8(0xB8);
+    emit8(0xB8 + reg_num(dst));  // MOV r32, imm32 (zero-extends)
     emit32(imm);
 }
 
-void X86_64::emit_mov_rdi_rax() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xC7);
+void X86_64::mov(Reg dst, Mem src) {
+    emit_rex(true, dst, src.base);
+    emit8(0x8B);  // MOV r64, r/m64
+    emit_modrm_mem(dst, src);
 }
 
-void X86_64::emit_mov_rsi_rax() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xC6);
+void X86_64::mov(Mem dst, Reg src) {
+    emit_rex(true, src, dst.base);
+    emit8(0x89);  // MOV r/m64, r64
+    emit_modrm_mem(src, dst);
 }
 
-void X86_64::emit_mov_rdx_rax() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xC2);
+void X86_64::lea(Reg dst, Mem src) {
+    emit_rex(true, dst, src.base);
+    emit8(0x8D);  // LEA r64, m
+    emit_modrm_mem(dst, src);
 }
 
-void X86_64::emit_mov_rcx_rax() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xC1);
+void X86_64::add(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x01);  // ADD r/m64, r64
+    emit_modrm_reg(src, dst);
 }
 
-void X86_64::emit_mov_r8_rax() {
-    emit8(0x49);
-    emit8(0x89);
-    emit8(0xC0);
+void X86_64::add(Reg dst, int32_t imm) {
+    emit_rex_single(true, dst);
+    if (imm >= -128 && imm <= 127) {
+        emit8(0x83);  // ADD r/m64, imm8
+        emit_modrm(0b11, 0, reg_num(dst));
+        emit8(static_cast<uint8_t>(imm));
+    } else {
+        emit8(0x81);  // ADD r/m64, imm32
+        emit_modrm(0b11, 0, reg_num(dst));
+        emit32(imm);
+    }
 }
 
-void X86_64::emit_mov_r9_rax() {
-    emit8(0x49);
-    emit8(0x89);
-    emit8(0xC1);
+void X86_64::sub(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x29);  // SUB r/m64, r64
+    emit_modrm_reg(src, dst);
 }
 
-void X86_64::emit_mov_rbp_offset_rdi(int32_t offset) {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0x7D);
-    emit8(static_cast<uint8_t>(offset));
+void X86_64::sub(Reg dst, int32_t imm) {
+    emit_rex_single(true, dst);
+    if (imm >= -128 && imm <= 127) {
+        emit8(0x83);  // SUB r/m64, imm8
+        emit_modrm(0b11, 5, reg_num(dst));
+        emit8(static_cast<uint8_t>(imm));
+    } else {
+        emit8(0x81);  // SUB r/m64, imm32
+        emit_modrm(0b11, 5, reg_num(dst));
+        emit32(imm);
+    }
 }
 
-void X86_64::emit_mov_rbp_offset_rsi(int32_t offset) {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0x75);
-    emit8(static_cast<uint8_t>(offset));
-}
-
-void X86_64::emit_mov_rbp_offset_rdx(int32_t offset) {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0x55);
-    emit8(static_cast<uint8_t>(offset));
-}
-
-void X86_64::emit_mov_rbp_offset_rcx(int32_t offset) {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0x4D);
-    emit8(static_cast<uint8_t>(offset));
-}
-
-void X86_64::emit_mov_rbp_offset_r8(int32_t offset) {
-    emit8(0x4C);
-    emit8(0x89);
-    emit8(0x45);
-    emit8(static_cast<uint8_t>(offset));
-}
-
-void X86_64::emit_mov_rbp_offset_r9(int32_t offset) {
-    emit8(0x4C);
-    emit8(0x89);
-    emit8(0x4D);
-    emit8(static_cast<uint8_t>(offset));
-}
-
-void X86_64::emit_syscall() {
+void X86_64::imul(Reg dst, Reg src) {
+    emit_rex(true, dst, src);
     emit8(0x0F);
-    emit8(0x05);
+    emit8(0xAF);  // IMUL r64, r/m64
+    emit_modrm_reg(dst, src);
 }
 
-void X86_64::emit_push_rax() {
-    emit8(0x50);
+void X86_64::idiv(Reg src) {
+    emit_rex_single(true, src);
+    emit8(0xF7);  // IDIV r/m64
+    emit_modrm(0b11, 7, reg_num(src));
 }
 
-void X86_64::emit_pop_rcx() {
-    emit8(0x59);
+void X86_64::neg(Reg reg) {
+    emit_rex_single(true, reg);
+    emit8(0xF7);  // NEG r/m64
+    emit_modrm(0b11, 3, reg_num(reg));
 }
 
-void X86_64::emit_pop_rdi() {
-    emit8(0x5F);
-}
-
-void X86_64::emit_pop_rsi() {
-    emit8(0x5E);
-}
-
-void X86_64::emit_pop_rdx() {
-    emit8(0x5A);
-}
-
-void X86_64::emit_pop_r8() {
-    emit8(0x41);
-    emit8(0x58);
-}
-
-void X86_64::emit_pop_r9() {
-    emit8(0x41);
-    emit8(0x59);
-}
-
-void X86_64::emit_add_rax_rcx() {
+void X86_64::cqo() {
     emit8(0x48);
-    emit8(0x01);
-    emit8(0xC8);
+    emit8(0x99);  // CQO
 }
 
-void X86_64::emit_sub_rax_rcx() {
-    emit8(0x48);
-    emit8(0x29);
-    emit8(0xC8);
+void X86_64::xor_(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x31);  // XOR r/m64, r64
+    emit_modrm_reg(src, dst);
 }
 
-void X86_64::emit_imul_rax_rcx() {
-    emit8(0x48);
+void X86_64::and_(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x21);  // AND r/m64, r64
+    emit_modrm_reg(src, dst);
+}
+
+void X86_64::or_(Reg dst, Reg src) {
+    emit_rex(true, src, dst);
+    emit8(0x09);  // OR r/m64, r64
+    emit_modrm_reg(src, dst);
+}
+
+void X86_64::test(Reg a, Reg b) {
+    emit_rex(true, b, a);
+    emit8(0x85);  // TEST r/m64, r64
+    emit_modrm_reg(b, a);
+}
+
+void X86_64::cmp(Reg a, Reg b) {
+    emit_rex(true, b, a);
+    emit8(0x39);  // CMP r/m64, r64
+    emit_modrm_reg(b, a);
+}
+
+void X86_64::push(Reg reg) {
+    if (needs_rex_r(reg)) {
+        emit8(0x41);
+    }
+    emit8(0x50 + reg_num(reg));  // PUSH r64
+}
+
+void X86_64::pop(Reg reg) {
+    if (needs_rex_r(reg)) {
+        emit8(0x41);
+    }
+    emit8(0x58 + reg_num(reg));  // POP r64
+}
+
+void X86_64::call(int32_t rel) {
+    emit8(0xE8);  // CALL rel32
+    emit32(rel);
+}
+
+void X86_64::jmp(int32_t rel) {
+    emit8(0xE9);  // JMP rel32
+    emit32(rel);
+}
+
+void X86_64::jcc(Cond cc, int32_t rel) {
     emit8(0x0F);
-    emit8(0xAF);
-    emit8(0xC1);
+    emit8(0x80 + static_cast<uint8_t>(cc));  // Jcc rel32
+    emit32(rel);
 }
 
-void X86_64::emit_cqo() {
-    emit8(0x48);
-    emit8(0x99);
+void X86_64::ret() {
+    emit8(0xC3);  // RET
 }
 
-void X86_64::emit_idiv_rcx() {
-    emit8(0x48);
-    emit8(0xF7);
-    emit8(0xF9);
-}
-
-void X86_64::emit_mov_rax_rdx() {
-    emit8(0x48);
-    emit8(0x89);
-    emit8(0xD0);
-}
-
-void X86_64::emit_neg_rax() {
-    emit8(0x48);
-    emit8(0xF7);
-    emit8(0xD8);
-}
-
-void X86_64::emit_cmp_rax_rcx() {
-    emit8(0x48);
-    emit8(0x39);
-    emit8(0xC8);
-}
-
-void X86_64::emit_sete_al() {
+void X86_64::setcc(Cond cc, Reg dst) {
+    if (needs_rex_r(dst)) {
+        emit8(0x41);
+    }
     emit8(0x0F);
-    emit8(0x94);
-    emit8(0xC0);
+    emit8(0x90 + static_cast<uint8_t>(cc));  // SETcc r/m8
+    emit_modrm(0b11, 0, reg_num(dst));
 }
 
-void X86_64::emit_setne_al() {
+void X86_64::movzx(Reg dst, Reg src8) {
+    emit_rex(true, dst, src8);
     emit8(0x0F);
-    emit8(0x95);
-    emit8(0xC0);
+    emit8(0xB6);  // MOVZX r64, r/m8
+    emit_modrm_reg(dst, src8);
 }
 
-void X86_64::emit_setl_al() {
+void X86_64::syscall() {
     emit8(0x0F);
-    emit8(0x9C);
-    emit8(0xC0);
+    emit8(0x05);  // SYSCALL
 }
 
-void X86_64::emit_setg_al() {
+void X86_64::movss(Reg xmm_dst, Mem src) {
+    emit8(0xF3);
     emit8(0x0F);
-    emit8(0x9F);
-    emit8(0xC0);
+    emit8(0x10);  // MOVSS xmm, m32
+    emit_modrm_mem(xmm_dst, src);
 }
 
-void X86_64::emit_setle_al() {
+void X86_64::movss(Mem dst, Reg xmm_src) {
+    emit8(0xF3);
     emit8(0x0F);
-    emit8(0x9E);
-    emit8(0xC0);
+    emit8(0x11);  // MOVSS m32, xmm
+    emit_modrm_mem(xmm_src, dst);
 }
 
-void X86_64::emit_setge_al() {
+void X86_64::movss(Reg xmm_dst, Reg xmm_src) {
+    emit8(0xF3);
     emit8(0x0F);
-    emit8(0x9D);
-    emit8(0xC0);
+    emit8(0x10);  // MOVSS xmm, xmm
+    emit_modrm_reg(xmm_dst, xmm_src);
 }
 
-void X86_64::emit_movzx_rax_al() {
-    emit8(0x48);
+void X86_64::movd(Reg xmm, Reg r32) {
+    emit8(0x66);
     emit8(0x0F);
-    emit8(0xB6);
-    emit8(0xC0);
+    emit8(0x6E);  // MOVD xmm, r/m32
+    emit_modrm_reg(xmm, r32);
 }
 
-void X86_64::emit_test_rax_rax() {
-    emit8(0x48);
-    emit8(0x85);
-    emit8(0xC0);
-}
-
-void X86_64::emit_setz_al() {
+void X86_64::movd_to_reg(Reg r32, Reg xmm) {
+    emit8(0x66);
     emit8(0x0F);
-    emit8(0x94);
-    emit8(0xC0);
+    emit8(0x7E);  // MOVD r/m32, xmm
+    emit_modrm_reg(xmm, r32);
 }
 
-void X86_64::emit_xor_rax_rax() {
-    emit8(0x48);
-    emit8(0x31);
-    emit8(0xC0);
-}
-
-void X86_64::emit_test_rcx_rcx() {
-    emit8(0x48);
-    emit8(0x85);
-    emit8(0xC9);
-}
-
-void X86_64::emit_jz_rel32(int32_t offset) {
+void X86_64::addss(Reg dst, Reg src) {
+    emit8(0xF3);
     emit8(0x0F);
-    emit8(0x84);
-    emit32(offset);
+    emit8(0x58);  // ADDSS xmm, xmm
+    emit_modrm_reg(dst, src);
 }
 
-void X86_64::emit_jmp_rel32(int32_t offset) {
-    emit8(0xE9);
-    emit32(offset);
+void X86_64::subss(Reg dst, Reg src) {
+    emit8(0xF3);
+    emit8(0x0F);
+    emit8(0x5C);  // SUBSS xmm, xmm
+    emit_modrm_reg(dst, src);
+}
+
+void X86_64::mulss(Reg dst, Reg src) {
+    emit8(0xF3);
+    emit8(0x0F);
+    emit8(0x59);  // MULSS xmm, xmm
+    emit_modrm_reg(dst, src);
+}
+
+void X86_64::divss(Reg dst, Reg src) {
+    emit8(0xF3);
+    emit8(0x0F);
+    emit8(0x5E);  // DIVSS xmm, xmm
+    emit_modrm_reg(dst, src);
+}
+
+void X86_64::xorps(Reg dst, Reg src) {
+    emit8(0x0F);
+    emit8(0x57);  // XORPS xmm, xmm
+    emit_modrm_reg(dst, src);
 }
 
 }  // namespace zex
