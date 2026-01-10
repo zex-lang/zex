@@ -2,6 +2,47 @@
 
 namespace zex {
 
+static std::string type_to_string(const Type& t) {
+    switch (t.kind) {
+        case TypeKind::VOID:
+            return "void";
+        case TypeKind::CHAR:
+            return "char";
+        case TypeKind::I8:
+            return "i8";
+        case TypeKind::I16:
+            return "i16";
+        case TypeKind::I32:
+            return "i32";
+        case TypeKind::I64:
+            return "i64";
+        case TypeKind::F32:
+            return "f32";
+        case TypeKind::BOOL:
+            return "bool";
+        case TypeKind::POINTER:
+            return "*" + (t.element_type ? type_to_string(*t.element_type) : "unknown");
+        case TypeKind::ARRAY:
+            return "[" + (t.element_type ? type_to_string(*t.element_type) : "unknown") + "]";
+    }
+    return "unknown";
+}
+
+static bool is_integer_type(TypeKind k) {
+    return k == TypeKind::I8 || k == TypeKind::I16 || k == TypeKind::I32 || k == TypeKind::I64;
+}
+
+static bool types_compatible(const Type& expected, const Type& actual) {
+    if (expected.equals(actual)) {
+        return true;
+    }
+    // Allow integer coercion
+    if (is_integer_type(expected.kind) && is_integer_type(actual.kind)) {
+        return true;
+    }
+    return false;
+}
+
 void SemanticAnalyzer::analyze(Program& program) {
     register_functions(program);
 
@@ -42,6 +83,7 @@ void SemanticAnalyzer::register_functions(Program& program) {
 void SemanticAnalyzer::analyze_function(Function& func) {
     local_variables_.clear();
     next_stack_offset_ = -8;
+    current_return_type_ = func.return_type;
 
     for (const auto& param : func.params) {
         if (local_variables_.find(param.name) != local_variables_.end()) {
@@ -109,6 +151,15 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
     } else if (auto* ret = dynamic_cast<ReturnStmt*>(stmt)) {
         if (ret->value) {
             analyze_expression(ret->value.get());
+            Type expr_type = get_expression_type(ret->value.get());
+            if (!types_compatible(current_return_type_, expr_type)) {
+                std::string msg = "expected " + type_to_string(current_return_type_) + " but got " +
+                                  type_to_string(expr_type);
+                throw CompileError(ErrorCode::INVALID_RETURN_TYPE, {}, msg);
+            }
+        } else if (current_return_type_.kind != TypeKind::VOID) {
+            throw CompileError(ErrorCode::INVALID_RETURN_TYPE, {},
+                               "function requires return value");
         }
     } else if (auto* if_stmt = dynamic_cast<IfStmt*>(stmt)) {
         analyze_expression(if_stmt->condition.get());
@@ -216,6 +267,72 @@ const VariableInfo* SemanticAnalyzer::get_variable(const std::string& name) cons
         return &it->second;
     }
     return nullptr;
+}
+
+Type SemanticAnalyzer::get_expression_type(Expression* expr) {
+    if (dynamic_cast<IntLiteral*>(expr)) {
+        return Type(TypeKind::I64);
+    }
+    if (dynamic_cast<FloatLiteral*>(expr)) {
+        return Type(TypeKind::F32);
+    }
+    if (dynamic_cast<CharLiteral*>(expr)) {
+        return Type(TypeKind::CHAR);
+    }
+    if (dynamic_cast<BoolLiteral*>(expr)) {
+        return Type(TypeKind::BOOL);
+    }
+    if (dynamic_cast<StringLiteral*>(expr)) {
+        Type ptr(TypeKind::POINTER);
+        ptr.element_type = std::make_unique<Type>(TypeKind::CHAR);
+        return ptr;
+    }
+    if (auto* ident = dynamic_cast<Identifier*>(expr)) {
+        auto it = local_variables_.find(ident->name);
+        if (it != local_variables_.end()) {
+            return it->second.type;
+        }
+        return Type(TypeKind::I64);
+    }
+    if (auto* call = dynamic_cast<CallExpr*>(expr)) {
+        auto it = function_table_.find(call->callee);
+        if (it != function_table_.end()) {
+            return it->second.return_type;
+        }
+        return Type(TypeKind::I64);
+    }
+    if (auto* binary = dynamic_cast<BinaryExpr*>(expr)) {
+        switch (binary->op) {
+            case BinaryOp::EQ:
+            case BinaryOp::NE:
+            case BinaryOp::LT:
+            case BinaryOp::LE:
+            case BinaryOp::GT:
+            case BinaryOp::GE:
+            case BinaryOp::AND:
+            case BinaryOp::OR:
+                return Type(TypeKind::BOOL);
+            default:
+                return get_expression_type(binary->left.get());
+        }
+    }
+    if (auto* unary = dynamic_cast<UnaryExpr*>(expr)) {
+        if (unary->op == UnaryOp::NOT) {
+            return Type(TypeKind::BOOL);
+        }
+        return get_expression_type(unary->operand.get());
+    }
+    if (auto* idx = dynamic_cast<IndexExpr*>(expr)) {
+        Type arr = get_expression_type(idx->array.get());
+        if ((arr.kind == TypeKind::ARRAY || arr.kind == TypeKind::POINTER) && arr.element_type) {
+            return *arr.element_type;
+        }
+        return Type(TypeKind::I64);
+    }
+    if (dynamic_cast<SizeofExpr*>(expr)) {
+        return Type(TypeKind::I64);
+    }
+    return Type(TypeKind::I64);
 }
 
 }  // namespace zex

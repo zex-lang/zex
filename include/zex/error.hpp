@@ -32,7 +32,10 @@ enum class ErrorCode {
     UNDEFINED_FUNCTION,
     UNDEFINED_VARIABLE,
     NO_MAIN_FUNCTION,
-    UNKNOWN_EXPRESSION
+    UNKNOWN_EXPRESSION,
+    TYPE_MISMATCH,
+    INVALID_RETURN_TYPE,
+    INVALID_OPERAND_TYPES
 };
 
 // Location in source code for error reporting
@@ -88,6 +91,12 @@ class CompileError : public std::exception {
                 return "no main function defined";
             case ErrorCode::UNKNOWN_EXPRESSION:
                 return "unknown expression type";
+            case ErrorCode::TYPE_MISMATCH:
+                return "type mismatch";
+            case ErrorCode::INVALID_RETURN_TYPE:
+                return "return type does not match function";
+            case ErrorCode::INVALID_OPERAND_TYPES:
+                return "invalid operand types for operation";
         }
         return "unknown error";
     }

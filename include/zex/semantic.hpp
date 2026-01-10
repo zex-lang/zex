@@ -48,11 +48,13 @@ class SemanticAnalyzer {
     std::vector<FunctionInfo> functions_;
     std::unordered_map<std::string, VariableInfo> local_variables_;
     int32_t next_stack_offset_;
+    Type current_return_type_;
 
     void register_functions(Program& program);
     void analyze_function(Function& func);
     void analyze_statement(Statement* stmt);
     void analyze_expression(Expression* expr);
+    Type get_expression_type(Expression* expr);
 };
 
 }  // namespace zex
