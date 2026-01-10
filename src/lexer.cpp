@@ -114,6 +114,8 @@ const char* token_type_to_string(TokenType type) {
             return "char";
         case TokenType::STRING_LITERAL:
             return "string";
+        case TokenType::KW_ASM:
+            return "asm";
         case TokenType::END_OF_FILE:
             return "eof";
         case TokenType::INVALID:
@@ -230,15 +232,15 @@ char Lexer::parse_escape_sequence() {
 
 TokenType Lexer::check_keyword(const std::string& word) const {
     static const std::unordered_map<std::string, TokenType> keywords = {
-        {"fun", TokenType::KW_FUN},      {"var", TokenType::KW_VAR},
-        {"const", TokenType::KW_CONST},  {"return", TokenType::KW_RETURN},
-        {"void", TokenType::KW_VOID},    {"char", TokenType::KW_CHAR},
-        {"i8", TokenType::KW_I8},        {"i16", TokenType::KW_I16},
-        {"i32", TokenType::KW_I32},      {"i64", TokenType::KW_I64},
-        {"f32", TokenType::KW_F32},      {"bool", TokenType::KW_BOOL},
-        {"true", TokenType::KW_TRUE},    {"false", TokenType::KW_FALSE},
-        {"if", TokenType::KW_IF},        {"else", TokenType::KW_ELSE},
-        {"sizeof", TokenType::KW_SIZEOF}};
+        {"fun", TokenType::KW_FUN},       {"var", TokenType::KW_VAR},
+        {"const", TokenType::KW_CONST},   {"return", TokenType::KW_RETURN},
+        {"void", TokenType::KW_VOID},     {"char", TokenType::KW_CHAR},
+        {"i8", TokenType::KW_I8},         {"i16", TokenType::KW_I16},
+        {"i32", TokenType::KW_I32},       {"i64", TokenType::KW_I64},
+        {"f32", TokenType::KW_F32},       {"bool", TokenType::KW_BOOL},
+        {"true", TokenType::KW_TRUE},     {"false", TokenType::KW_FALSE},
+        {"if", TokenType::KW_IF},         {"else", TokenType::KW_ELSE},
+        {"sizeof", TokenType::KW_SIZEOF}, {"asm", TokenType::KW_ASM}};
 
     auto it = keywords.find(word);
     if (it != keywords.end()) {

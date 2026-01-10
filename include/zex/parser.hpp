@@ -47,6 +47,7 @@ class Parser {
     std::unique_ptr<ConstDecl> parse_const_decl();
     std::unique_ptr<ReturnStmt> parse_return();
     std::unique_ptr<IfStmt> parse_if_stmt();
+    std::unique_ptr<AsmBlock> parse_asm_block();
     std::vector<std::unique_ptr<Statement>> parse_block();
 
     // Expression parsing with precedence climbing

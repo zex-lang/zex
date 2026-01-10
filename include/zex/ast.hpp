@@ -246,6 +246,122 @@ struct IfStmt : Statement {
         : condition(std::move(cond)), then_body(std::move(tb)), else_body(std::move(eb)) {}
 };
 
+// Assembly instruction opcodes
+enum class AsmOpcode {
+    MOV,
+    ADD,
+    SUB,
+    IMUL,
+    IDIV,
+    NEG,
+    CQO,
+    XOR,
+    AND,
+    OR,
+    TEST,
+    CMP,
+    PUSH,
+    POP,
+    CALL,
+    JMP,
+    RET,
+    JE,
+    JNE,
+    JL,
+    JG,
+    JLE,
+    JGE,
+    JZ,
+    JNZ,
+    SETE,
+    SETNE,
+    SETL,
+    SETG,
+    SETLE,
+    SETGE,
+    MOVZX,
+    LEA,
+    SYSCALL,
+    NOP
+};
+
+// Operand types for assembly instructions
+enum class AsmOperandKind { REG, IMM, MEM, VAR };
+
+// Register encoding for asm operands
+enum class AsmReg : uint8_t {
+    RAX = 0,
+    RCX = 1,
+    RDX = 2,
+    RBX = 3,
+    RSP = 4,
+    RBP = 5,
+    RSI = 6,
+    RDI = 7,
+    R8 = 8,
+    R9 = 9,
+    R10 = 10,
+    R11 = 11,
+    R12 = 12,
+    R13 = 13,
+    R14 = 14,
+    R15 = 15,
+    AL = 100,
+    CL = 101,
+    DL = 102,
+    BL = 103
+};
+
+// Single operand in an assembly instruction
+struct AsmOperand {
+    AsmOperandKind kind;
+    AsmReg reg;
+    int64_t imm;
+    std::string var_name;
+    AsmReg mem_base;
+    int32_t mem_offset;
+
+    static AsmOperand make_reg(AsmReg r) {
+        AsmOperand op;
+        op.kind = AsmOperandKind::REG;
+        op.reg = r;
+        return op;
+    }
+
+    static AsmOperand make_imm(int64_t v) {
+        AsmOperand op;
+        op.kind = AsmOperandKind::IMM;
+        op.imm = v;
+        return op;
+    }
+
+    static AsmOperand make_var(const std::string& name) {
+        AsmOperand op;
+        op.kind = AsmOperandKind::VAR;
+        op.var_name = name;
+        return op;
+    }
+
+    static AsmOperand make_mem(AsmReg base, int32_t offset) {
+        AsmOperand op;
+        op.kind = AsmOperandKind::MEM;
+        op.mem_base = base;
+        op.mem_offset = offset;
+        return op;
+    }
+};
+
+// Single assembly instruction with opcode and operands
+struct AsmInstruction {
+    AsmOpcode opcode;
+    std::vector<AsmOperand> operands;
+};
+
+// Inline assembly block statement
+struct AsmBlock : Statement {
+    std::vector<AsmInstruction> instructions;
+};
+
 // Function definition with parameters and body
 struct Function {
     std::string name;

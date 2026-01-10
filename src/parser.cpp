@@ -1,5 +1,7 @@
 #include "zex/parser.hpp"
 
+#include <unordered_map>
+
 namespace zex {
 
 Parser::Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)), current_(0) {}
@@ -110,6 +112,9 @@ std::unique_ptr<Statement> Parser::parse_statement() {
     }
     if (check(TokenType::KW_IF)) {
         return parse_if_stmt();
+    }
+    if (check(TokenType::KW_ASM)) {
+        return parse_asm_block();
     }
     if (check(TokenType::IDENTIFIER)) {
         return parse_assign_or_expr_stmt();
@@ -552,6 +557,106 @@ std::vector<std::unique_ptr<Expression>> Parser::parse_arguments() {
     } while (match(TokenType::COMMA));
 
     return args;
+}
+
+std::unique_ptr<AsmBlock> Parser::parse_asm_block() {
+    expect(TokenType::KW_ASM, ErrorCode::UNEXPECTED_TOKEN);
+    expect(TokenType::LBRACE, ErrorCode::UNEXPECTED_TOKEN);
+
+    auto block = std::make_unique<AsmBlock>();
+
+    static const std::unordered_map<std::string, AsmOpcode> opcodes = {
+        {"mov", AsmOpcode::MOV},         {"add", AsmOpcode::ADD},     {"sub", AsmOpcode::SUB},
+        {"imul", AsmOpcode::IMUL},       {"idiv", AsmOpcode::IDIV},   {"neg", AsmOpcode::NEG},
+        {"cqo", AsmOpcode::CQO},         {"xor", AsmOpcode::XOR},     {"and", AsmOpcode::AND},
+        {"or", AsmOpcode::OR},           {"test", AsmOpcode::TEST},   {"cmp", AsmOpcode::CMP},
+        {"push", AsmOpcode::PUSH},       {"pop", AsmOpcode::POP},     {"call", AsmOpcode::CALL},
+        {"jmp", AsmOpcode::JMP},         {"ret", AsmOpcode::RET},     {"je", AsmOpcode::JE},
+        {"jne", AsmOpcode::JNE},         {"jl", AsmOpcode::JL},       {"jg", AsmOpcode::JG},
+        {"jle", AsmOpcode::JLE},         {"jge", AsmOpcode::JGE},     {"jz", AsmOpcode::JZ},
+        {"jnz", AsmOpcode::JNZ},         {"sete", AsmOpcode::SETE},   {"setne", AsmOpcode::SETNE},
+        {"setl", AsmOpcode::SETL},       {"setg", AsmOpcode::SETG},   {"setle", AsmOpcode::SETLE},
+        {"setge", AsmOpcode::SETGE},     {"movzx", AsmOpcode::MOVZX}, {"lea", AsmOpcode::LEA},
+        {"syscall", AsmOpcode::SYSCALL}, {"nop", AsmOpcode::NOP}};
+
+    static const std::unordered_map<std::string, AsmReg> registers = {
+        {"rax", AsmReg::RAX}, {"rcx", AsmReg::RCX}, {"rdx", AsmReg::RDX}, {"rbx", AsmReg::RBX},
+        {"rsp", AsmReg::RSP}, {"rbp", AsmReg::RBP}, {"rsi", AsmReg::RSI}, {"rdi", AsmReg::RDI},
+        {"r8", AsmReg::R8},   {"r9", AsmReg::R9},   {"r10", AsmReg::R10}, {"r11", AsmReg::R11},
+        {"r12", AsmReg::R12}, {"r13", AsmReg::R13}, {"r14", AsmReg::R14}, {"r15", AsmReg::R15},
+        {"al", AsmReg::AL},   {"cl", AsmReg::CL},   {"dl", AsmReg::DL},   {"bl", AsmReg::BL}};
+
+    while (!check(TokenType::RBRACE) && !at_end()) {
+        expect(TokenType::IDENTIFIER, ErrorCode::UNEXPECTED_TOKEN);
+        std::string mnemonic = previous().value;
+
+        auto op_it = opcodes.find(mnemonic);
+        if (op_it == opcodes.end()) {
+            throw error(ErrorCode::UNEXPECTED_TOKEN, mnemonic);
+        }
+
+        AsmInstruction instr;
+        instr.opcode = op_it->second;
+
+        // Parse operands until we see another mnemonic or end of block
+        while (!check(TokenType::RBRACE)) {
+            if (check(TokenType::INT_LITERAL)) {
+                advance();
+                int64_t val = std::stoll(previous().value);
+                instr.operands.push_back(AsmOperand::make_imm(val));
+            } else if (check(TokenType::MINUS)) {
+                advance();
+                expect(TokenType::INT_LITERAL, ErrorCode::UNEXPECTED_TOKEN);
+                int64_t val = -std::stoll(previous().value);
+                instr.operands.push_back(AsmOperand::make_imm(val));
+            } else if (check(TokenType::IDENTIFIER)) {
+                std::string name = peek().value;
+                // Check if this is a mnemonic for next instruction
+                if (opcodes.find(name) != opcodes.end() && !instr.operands.empty()) {
+                    break;
+                }
+                if (opcodes.find(name) != opcodes.end() && instr.operands.empty()) {
+                    // Zero operand instruction like syscall, ret, cqo
+                    break;
+                }
+                advance();
+                auto reg_it = registers.find(name);
+                if (reg_it != registers.end()) {
+                    instr.operands.push_back(AsmOperand::make_reg(reg_it->second));
+                } else {
+                    instr.operands.push_back(AsmOperand::make_var(name));
+                }
+            } else if (check(TokenType::LBRACKET)) {
+                advance();
+                expect(TokenType::IDENTIFIER, ErrorCode::UNEXPECTED_TOKEN);
+                std::string base_name = previous().value;
+                auto base_it = registers.find(base_name);
+                if (base_it == registers.end()) {
+                    throw error(ErrorCode::UNEXPECTED_TOKEN, base_name);
+                }
+                AsmReg base = base_it->second;
+                int32_t offset = 0;
+                if (match(TokenType::PLUS)) {
+                    expect(TokenType::INT_LITERAL, ErrorCode::UNEXPECTED_TOKEN);
+                    offset = std::stoi(previous().value);
+                } else if (match(TokenType::MINUS)) {
+                    expect(TokenType::INT_LITERAL, ErrorCode::UNEXPECTED_TOKEN);
+                    offset = -std::stoi(previous().value);
+                }
+                expect(TokenType::RBRACKET, ErrorCode::UNEXPECTED_TOKEN);
+                instr.operands.push_back(AsmOperand::make_mem(base, offset));
+            } else if (match(TokenType::COMMA)) {
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        block->instructions.push_back(std::move(instr));
+    }
+
+    expect(TokenType::RBRACE, ErrorCode::UNEXPECTED_TOKEN);
+    return block;
 }
 
 }  // namespace zex

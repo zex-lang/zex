@@ -189,6 +189,8 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
             int32_t else_rel = static_cast<int32_t>(end_target - (else_patch + 4));
             emitter_.patch_rel32(else_patch, else_rel);
         }
+    } else if (auto* asm_block = dynamic_cast<const AsmBlock*>(stmt)) {
+        generate_asm_block(asm_block);
     }
 }
 
@@ -400,6 +402,220 @@ void CodeGenerator::resolve_calls() {
             size_t after_call = patch.call_site + 4;
             int32_t rel = static_cast<int32_t>(target - after_call);
             emitter_.patch_rel32(patch.call_site, rel);
+        }
+    }
+}
+
+Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
+    switch (ar) {
+        case AsmReg::RAX:
+            return Reg::RAX;
+        case AsmReg::RCX:
+            return Reg::RCX;
+        case AsmReg::RDX:
+            return Reg::RDX;
+        case AsmReg::RBX:
+            return Reg::RBX;
+        case AsmReg::RSP:
+            return Reg::RSP;
+        case AsmReg::RBP:
+            return Reg::RBP;
+        case AsmReg::RSI:
+            return Reg::RSI;
+        case AsmReg::RDI:
+            return Reg::RDI;
+        case AsmReg::R8:
+            return Reg::R8;
+        case AsmReg::R9:
+            return Reg::R9;
+        case AsmReg::R10:
+            return Reg::R10;
+        case AsmReg::R11:
+            return Reg::R11;
+        case AsmReg::R12:
+            return Reg::R12;
+        case AsmReg::R13:
+            return Reg::R13;
+        case AsmReg::R14:
+            return Reg::R14;
+        case AsmReg::R15:
+            return Reg::R15;
+        case AsmReg::AL:
+            return Reg::AL;
+        case AsmReg::CL:
+            return Reg::CL;
+        case AsmReg::DL:
+            return Reg::DL;
+        case AsmReg::BL:
+            return Reg::BL;
+    }
+    return Reg::RAX;
+}
+
+void CodeGenerator::generate_asm_block(const AsmBlock* block) {
+    for (const auto& instr : block->instructions) {
+        const auto& ops = instr.operands;
+
+        switch (instr.opcode) {
+            case AsmOpcode::MOV:
+                if (ops.size() == 2) {
+                    if (ops[0].kind == AsmOperandKind::REG && ops[1].kind == AsmOperandKind::REG) {
+                        emitter_.mov(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::IMM) {
+                        emitter_.mov(asm_reg_to_reg(ops[0].reg), ops[1].imm);
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::VAR) {
+                        int32_t offset = locals_[ops[1].var_name].stack_offset;
+                        emitter_.mov(asm_reg_to_reg(ops[0].reg), Mem(Reg::RBP, offset));
+                    } else if (ops[0].kind == AsmOperandKind::VAR &&
+                               ops[1].kind == AsmOperandKind::REG) {
+                        int32_t offset = locals_[ops[0].var_name].stack_offset;
+                        emitter_.mov(Mem(Reg::RBP, offset), asm_reg_to_reg(ops[1].reg));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::MEM) {
+                        emitter_.mov(asm_reg_to_reg(ops[0].reg),
+                                     Mem(asm_reg_to_reg(ops[1].mem_base), ops[1].mem_offset));
+                    } else if (ops[0].kind == AsmOperandKind::MEM &&
+                               ops[1].kind == AsmOperandKind::REG) {
+                        emitter_.mov(Mem(asm_reg_to_reg(ops[0].mem_base), ops[0].mem_offset),
+                                     asm_reg_to_reg(ops[1].reg));
+                    }
+                }
+                break;
+            case AsmOpcode::ADD:
+                if (ops.size() == 2) {
+                    if (ops[0].kind == AsmOperandKind::REG && ops[1].kind == AsmOperandKind::REG) {
+                        emitter_.add(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::IMM) {
+                        emitter_.add(asm_reg_to_reg(ops[0].reg), static_cast<int32_t>(ops[1].imm));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::VAR) {
+                        int32_t offset = locals_[ops[1].var_name].stack_offset;
+                        emitter_.mov(Reg::RCX, Mem(Reg::RBP, offset));
+                        emitter_.add(asm_reg_to_reg(ops[0].reg), Reg::RCX);
+                    }
+                }
+                break;
+            case AsmOpcode::SUB:
+                if (ops.size() == 2) {
+                    if (ops[0].kind == AsmOperandKind::REG && ops[1].kind == AsmOperandKind::REG) {
+                        emitter_.sub(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::IMM) {
+                        emitter_.sub(asm_reg_to_reg(ops[0].reg), static_cast<int32_t>(ops[1].imm));
+                    }
+                }
+                break;
+            case AsmOpcode::IMUL:
+                if (ops.size() == 2) {
+                    emitter_.imul(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::IDIV:
+                if (ops.size() == 1) {
+                    emitter_.idiv(asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::NEG:
+                if (ops.size() == 1) {
+                    emitter_.neg(asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::CQO:
+                emitter_.cqo();
+                break;
+            case AsmOpcode::XOR:
+                if (ops.size() == 2) {
+                    emitter_.xor_(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::AND:
+                if (ops.size() == 2) {
+                    emitter_.and_(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::OR:
+                if (ops.size() == 2) {
+                    emitter_.or_(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::TEST:
+                if (ops.size() == 2) {
+                    emitter_.test(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::CMP:
+                if (ops.size() == 2) {
+                    emitter_.cmp(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::PUSH:
+                if (ops.size() == 1) {
+                    emitter_.push(asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::POP:
+                if (ops.size() == 1) {
+                    emitter_.pop(asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::RET:
+                emitter_.ret();
+                break;
+            case AsmOpcode::SYSCALL:
+                emitter_.syscall();
+                break;
+            case AsmOpcode::NOP:
+                emitter_.code().push_back(0x90);
+                break;
+            case AsmOpcode::LEA:
+                if (ops.size() == 2 && ops[1].kind == AsmOperandKind::VAR) {
+                    int32_t offset = locals_[ops[1].var_name].stack_offset;
+                    emitter_.lea(asm_reg_to_reg(ops[0].reg), Mem(Reg::RBP, offset));
+                } else if (ops.size() == 2 && ops[1].kind == AsmOperandKind::MEM) {
+                    emitter_.lea(asm_reg_to_reg(ops[0].reg),
+                                 Mem(asm_reg_to_reg(ops[1].mem_base), ops[1].mem_offset));
+                }
+                break;
+            case AsmOpcode::MOVZX:
+                if (ops.size() == 2) {
+                    emitter_.movzx(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                }
+                break;
+            case AsmOpcode::SETE:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::E, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::SETNE:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::NE, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::SETL:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::L, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::SETG:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::G, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::SETLE:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::LE, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            case AsmOpcode::SETGE:
+                if (ops.size() == 1) {
+                    emitter_.setcc(Cond::GE, asm_reg_to_reg(ops[0].reg));
+                }
+                break;
+            default:
+                break;
         }
     }
 }

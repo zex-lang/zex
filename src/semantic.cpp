@@ -118,6 +118,16 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         for (auto& s : if_stmt->else_body) {
             analyze_statement(s.get());
         }
+    } else if (auto* asm_block = dynamic_cast<AsmBlock*>(stmt)) {
+        for (const auto& instr : asm_block->instructions) {
+            for (const auto& op : instr.operands) {
+                if (op.kind == AsmOperandKind::VAR) {
+                    if (local_variables_.find(op.var_name) == local_variables_.end()) {
+                        throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, op.var_name);
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -67,9 +67,11 @@ class CodeGenerator {
     void generate_function(const Function& func);
     void generate_statement(const Statement* stmt);
     void generate_expression(const Expression* expr);
+    void generate_asm_block(const AsmBlock* block);
     void resolve_calls();
     int32_t calculate_stack_size(const Function& func);
     size_t add_string_literal(const std::string& str);
+    Reg asm_reg_to_reg(AsmReg ar);
 };
 
 }  // namespace zex
