@@ -203,6 +203,12 @@ std::unique_ptr<Statement> Parser::parse_assign_or_expr_stmt() {
         }
     }
 
+    // Handle expression statements like function calls
+    if (dynamic_cast<CallExpr*>(expr.get())) {
+        expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
+        return std::make_unique<ExprStmt>(std::move(expr));
+    }
+
     throw error(ErrorCode::UNEXPECTED_TOKEN);
 }
 

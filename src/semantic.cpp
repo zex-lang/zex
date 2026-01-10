@@ -128,6 +128,8 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
                 }
             }
         }
+    } else if (auto* expr_stmt = dynamic_cast<ExprStmt*>(stmt)) {
+        analyze_expression(expr_stmt->expr.get());
     }
 }
 

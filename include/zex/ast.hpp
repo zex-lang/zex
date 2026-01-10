@@ -224,6 +224,12 @@ struct AssignStmt : Statement {
         : name(std::move(n)), value(std::move(v)) {}
 };
 
+// Expression statement for function calls and side effects
+struct ExprStmt : Statement {
+    std::unique_ptr<Expression> expr;
+    explicit ExprStmt(std::unique_ptr<Expression> e) : expr(std::move(e)) {}
+};
+
 // Array element assignment
 struct IndexAssignStmt : Statement {
     std::unique_ptr<Expression> target;

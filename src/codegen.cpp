@@ -191,6 +191,8 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
         }
     } else if (auto* asm_block = dynamic_cast<const AsmBlock*>(stmt)) {
         generate_asm_block(asm_block);
+    } else if (auto* expr_stmt = dynamic_cast<const ExprStmt*>(stmt)) {
+        generate_expression(expr_stmt->expr.get());
     }
 }
 
