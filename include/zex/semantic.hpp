@@ -20,6 +20,8 @@ struct VariableInfo {
     std::string name;
     Type type;
     int32_t stack_offset;
+    bool is_const;
+    int64_t const_value;
 };
 
 class SemanticAnalyzer {
@@ -29,6 +31,7 @@ class SemanticAnalyzer {
     const std::vector<FunctionInfo>& get_functions() const {
         return functions_;
     }
+    const VariableInfo* get_variable(const std::string& name) const;
 
    private:
     std::unordered_map<std::string, FunctionInfo> function_table_;

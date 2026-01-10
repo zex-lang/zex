@@ -85,6 +85,9 @@ std::unique_ptr<Statement> Parser::parse_statement() {
     if (check(TokenType::KW_VAR)) {
         return parse_var_decl();
     }
+    if (check(TokenType::KW_CONST)) {
+        return parse_const_decl();
+    }
     if (check(TokenType::KW_RETURN)) {
         return parse_return();
     }
@@ -218,6 +221,46 @@ Type Parser::parse_type() {
         return Type(TypeKind::INT);
     }
     throw error(ErrorCode::EXPECTED_TYPE);
+}
+
+std::unique_ptr<ConstDecl> Parser::parse_const_decl() {
+    expect(TokenType::KW_CONST, ErrorCode::UNEXPECTED_TOKEN);
+    expect(TokenType::IDENTIFIER, ErrorCode::EXPECTED_IDENTIFIER);
+    std::string name = previous().value;
+
+    expect(TokenType::COLON, ErrorCode::UNEXPECTED_TOKEN);
+    Type type = parse_type();
+    expect(TokenType::ASSIGN, ErrorCode::UNEXPECTED_TOKEN);
+    auto expr = parse_expression();
+    expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
+
+    int64_t value = eval_const_expr(expr.get());
+    return std::make_unique<ConstDecl>(name, type, value);
+}
+
+int64_t Parser::eval_const_expr(Expression* expr) {
+    if (auto* lit = dynamic_cast<IntLiteral*>(expr)) {
+        return lit->value;
+    }
+
+    if (auto* binary = dynamic_cast<BinaryExpr*>(expr)) {
+        int64_t left = eval_const_expr(binary->left.get());
+        int64_t right = eval_const_expr(binary->right.get());
+        switch (binary->op) {
+            case BinaryOp::ADD:
+                return left + right;
+            case BinaryOp::SUB:
+                return left - right;
+            case BinaryOp::MUL:
+                return left * right;
+            case BinaryOp::DIV:
+                return left / right;
+            case BinaryOp::MOD:
+                return left % right;
+        }
+    }
+
+    throw error(ErrorCode::EXPECTED_EXPRESSION);
 }
 
 }  // namespace zex

@@ -9,6 +9,7 @@ namespace zex {
 enum class TokenType {
     KW_FUN,
     KW_VAR,
+    KW_CONST,
     KW_RETURN,
     KW_INT,
 

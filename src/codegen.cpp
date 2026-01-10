@@ -49,7 +49,7 @@ int32_t CodeGenerator::calculate_stack_size(const Function& func) {
 void CodeGenerator::generate_function(const Function& func) {
     function_offsets_[func.name] = emitter_.current_offset();
 
-    local_offsets_.clear();
+    locals_.clear();
     stack_size_ = calculate_stack_size(func);
 
     emitter_.emit_push_rbp();
@@ -62,8 +62,18 @@ void CodeGenerator::generate_function(const Function& func) {
     int32_t offset = -8;
     for (const auto& stmt : func.body) {
         if (auto* var = dynamic_cast<VarDecl*>(stmt.get())) {
-            local_offsets_[var->name] = offset;
+            LocalVar lv;
+            lv.stack_offset = offset;
+            lv.is_const = false;
+            lv.const_value = 0;
+            locals_[var->name] = lv;
             offset -= 8;
+        } else if (auto* cst = dynamic_cast<ConstDecl*>(stmt.get())) {
+            LocalVar lv;
+            lv.stack_offset = 0;
+            lv.is_const = true;
+            lv.const_value = cst->value;
+            locals_[cst->name] = lv;
         }
     }
 
@@ -75,11 +85,11 @@ void CodeGenerator::generate_function(const Function& func) {
 void CodeGenerator::generate_statement(const Statement* stmt) {
     if (auto* var_decl = dynamic_cast<const VarDecl*>(stmt)) {
         generate_expression(var_decl->initializer.get());
-        int32_t offset = local_offsets_[var_decl->name];
+        int32_t offset = locals_[var_decl->name].stack_offset;
         emitter_.emit_mov_rbp_offset_rax(offset);
     } else if (auto* assign = dynamic_cast<const AssignStmt*>(stmt)) {
         generate_expression(assign->value.get());
-        int32_t offset = local_offsets_[assign->name];
+        int32_t offset = locals_[assign->name].stack_offset;
         emitter_.emit_mov_rbp_offset_rax(offset);
     } else if (auto* ret = dynamic_cast<const ReturnStmt*>(stmt)) {
         generate_expression(ret->value.get());
@@ -96,8 +106,12 @@ void CodeGenerator::generate_expression(const Expression* expr) {
     if (auto* lit = dynamic_cast<const IntLiteral*>(expr)) {
         emitter_.emit_mov_rax_imm64(lit->value);
     } else if (auto* ident = dynamic_cast<const Identifier*>(expr)) {
-        int32_t offset = local_offsets_[ident->name];
-        emitter_.emit_mov_rax_rbp_offset(offset);
+        const LocalVar& lv = locals_[ident->name];
+        if (lv.is_const) {
+            emitter_.emit_mov_rax_imm64(lv.const_value);
+        } else {
+            emitter_.emit_mov_rax_rbp_offset(lv.stack_offset);
+        }
     } else if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
         emitter_.emit_call_rel32(0);
 

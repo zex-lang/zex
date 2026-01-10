@@ -12,6 +12,8 @@ const char* token_type_to_string(TokenType type) {
             return "fun";
         case TokenType::KW_VAR:
             return "var";
+        case TokenType::KW_CONST:
+            return "const";
         case TokenType::KW_RETURN:
             return "return";
         case TokenType::KW_INT:
@@ -152,6 +154,7 @@ TokenType Lexer::check_keyword(const std::string& word) const {
     static const std::unordered_map<std::string, TokenType> keywords = {
         {"fun", TokenType::KW_FUN},
         {"var", TokenType::KW_VAR},
+        {"const", TokenType::KW_CONST},
         {"return", TokenType::KW_RETURN},
         {"int", TokenType::KW_INT}};
 

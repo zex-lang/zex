@@ -34,12 +34,15 @@ class Parser {
     std::unique_ptr<Statement> parse_statement();
     std::unique_ptr<Statement> parse_assign_or_expr_stmt();
     std::unique_ptr<VarDecl> parse_var_decl();
+    std::unique_ptr<ConstDecl> parse_const_decl();
     std::unique_ptr<ReturnStmt> parse_return();
 
     std::unique_ptr<Expression> parse_expression();
     std::unique_ptr<Expression> parse_additive();
     std::unique_ptr<Expression> parse_multiplicative();
     std::unique_ptr<Expression> parse_primary();
+
+    int64_t eval_const_expr(Expression* expr);
 
     Type parse_type();
 };

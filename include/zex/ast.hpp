@@ -59,6 +59,14 @@ struct Statement {
     virtual ~Statement() = default;
 };
 
+struct ConstDecl : Statement {
+    std::string name;
+    Type type;
+    int64_t value;
+
+    ConstDecl(std::string n, Type t, int64_t v) : name(std::move(n)), type(t), value(v) {}
+};
+
 struct VarDecl : Statement {
     std::string name;
     Type type;

@@ -56,12 +56,31 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         info.name = var_decl->name;
         info.type = var_decl->type;
         info.stack_offset = next_stack_offset_;
+        info.is_const = false;
+        info.const_value = 0;
         next_stack_offset_ -= 8;
 
         local_variables_[var_decl->name] = info;
+    } else if (auto* const_decl = dynamic_cast<ConstDecl*>(stmt)) {
+        if (local_variables_.find(const_decl->name) != local_variables_.end()) {
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, const_decl->name);
+        }
+
+        VariableInfo info;
+        info.name = const_decl->name;
+        info.type = const_decl->type;
+        info.stack_offset = 0;
+        info.is_const = true;
+        info.const_value = const_decl->value;
+
+        local_variables_[const_decl->name] = info;
     } else if (auto* assign = dynamic_cast<AssignStmt*>(stmt)) {
-        if (local_variables_.find(assign->name) == local_variables_.end()) {
+        auto it = local_variables_.find(assign->name);
+        if (it == local_variables_.end()) {
             throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, assign->name);
+        }
+        if (it->second.is_const) {
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, assign->name);
         }
         analyze_expression(assign->value.get());
     } else if (auto* ret = dynamic_cast<ReturnStmt*>(stmt)) {
@@ -100,6 +119,14 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
 const FunctionInfo* SemanticAnalyzer::get_function(const std::string& name) const {
     auto it = function_table_.find(name);
     if (it != function_table_.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+const VariableInfo* SemanticAnalyzer::get_variable(const std::string& name) const {
+    auto it = local_variables_.find(name);
+    if (it != local_variables_.end()) {
         return &it->second;
     }
     return nullptr;
