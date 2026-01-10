@@ -31,6 +31,7 @@ class Parser {
     void expect(TokenType type, ErrorCode err_code);
 
     std::unique_ptr<Function> parse_function();
+    std::vector<Parameter> parse_parameters();
     std::unique_ptr<Statement> parse_statement();
     std::unique_ptr<Statement> parse_assign_or_expr_stmt();
     std::unique_ptr<VarDecl> parse_var_decl();
@@ -41,6 +42,7 @@ class Parser {
     std::unique_ptr<Expression> parse_additive();
     std::unique_ptr<Expression> parse_multiplicative();
     std::unique_ptr<Expression> parse_primary();
+    std::vector<std::unique_ptr<Expression>> parse_arguments();
 
     int64_t eval_const_expr(Expression* expr);
 

@@ -20,6 +20,7 @@ enum class TokenType {
     ARROW,
     COLON,
     SEMICOLON,
+    COMMA,
     ASSIGN,
 
     PLUS,

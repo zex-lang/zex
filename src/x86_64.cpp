@@ -110,6 +110,78 @@ void X86_64::emit_mov_rdi_rax() {
     emit8(0xC7);
 }
 
+void X86_64::emit_mov_rsi_rax() {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0xC6);
+}
+
+void X86_64::emit_mov_rdx_rax() {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0xC2);
+}
+
+void X86_64::emit_mov_rcx_rax() {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0xC1);
+}
+
+void X86_64::emit_mov_r8_rax() {
+    emit8(0x49);
+    emit8(0x89);
+    emit8(0xC0);
+}
+
+void X86_64::emit_mov_r9_rax() {
+    emit8(0x49);
+    emit8(0x89);
+    emit8(0xC1);
+}
+
+void X86_64::emit_mov_rbp_offset_rdi(int32_t offset) {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0x7D);
+    emit8(static_cast<uint8_t>(offset));
+}
+
+void X86_64::emit_mov_rbp_offset_rsi(int32_t offset) {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0x75);
+    emit8(static_cast<uint8_t>(offset));
+}
+
+void X86_64::emit_mov_rbp_offset_rdx(int32_t offset) {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0x55);
+    emit8(static_cast<uint8_t>(offset));
+}
+
+void X86_64::emit_mov_rbp_offset_rcx(int32_t offset) {
+    emit8(0x48);
+    emit8(0x89);
+    emit8(0x4D);
+    emit8(static_cast<uint8_t>(offset));
+}
+
+void X86_64::emit_mov_rbp_offset_r8(int32_t offset) {
+    emit8(0x4C);
+    emit8(0x89);
+    emit8(0x45);
+    emit8(static_cast<uint8_t>(offset));
+}
+
+void X86_64::emit_mov_rbp_offset_r9(int32_t offset) {
+    emit8(0x4C);
+    emit8(0x89);
+    emit8(0x4D);
+    emit8(static_cast<uint8_t>(offset));
+}
+
 void X86_64::emit_syscall() {
     emit8(0x0F);
     emit8(0x05);
@@ -120,6 +192,28 @@ void X86_64::emit_push_rax() {
 }
 
 void X86_64::emit_pop_rcx() {
+    emit8(0x59);
+}
+
+void X86_64::emit_pop_rdi() {
+    emit8(0x5F);
+}
+
+void X86_64::emit_pop_rsi() {
+    emit8(0x5E);
+}
+
+void X86_64::emit_pop_rdx() {
+    emit8(0x5A);
+}
+
+void X86_64::emit_pop_r8() {
+    emit8(0x41);
+    emit8(0x58);
+}
+
+void X86_64::emit_pop_r9() {
+    emit8(0x41);
     emit8(0x59);
 }
 

@@ -29,6 +29,10 @@ void SemanticAnalyzer::register_functions(Program& program) {
         info.return_type = func->return_type;
         info.index = index;
 
+        for (const auto& param : func->params) {
+            info.param_types.push_back(param.type);
+        }
+
         function_table_[func->name] = info;
         functions_.push_back(info);
         index++;
@@ -38,6 +42,22 @@ void SemanticAnalyzer::register_functions(Program& program) {
 void SemanticAnalyzer::analyze_function(Function& func) {
     local_variables_.clear();
     next_stack_offset_ = -8;
+
+    for (const auto& param : func.params) {
+        if (local_variables_.find(param.name) != local_variables_.end()) {
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, param.name);
+        }
+
+        VariableInfo info;
+        info.name = param.name;
+        info.type = param.type;
+        info.stack_offset = next_stack_offset_;
+        info.is_const = false;
+        info.const_value = 0;
+        next_stack_offset_ -= 8;
+
+        local_variables_[param.name] = info;
+    }
 
     for (auto& stmt : func.body) {
         analyze_statement(stmt.get());
@@ -103,6 +123,9 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
     if (auto* call = dynamic_cast<CallExpr*>(expr)) {
         if (function_table_.find(call->callee) == function_table_.end()) {
             throw CompileError(ErrorCode::UNDEFINED_FUNCTION, {}, call->callee);
+        }
+        for (auto& arg : call->args) {
+            analyze_expression(arg.get());
         }
         return;
     }

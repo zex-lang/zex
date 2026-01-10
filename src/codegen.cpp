@@ -31,7 +31,7 @@ void CodeGenerator::generate(const Program& program) {
 }
 
 int32_t CodeGenerator::calculate_stack_size(const Function& func) {
-    int32_t size = 0;
+    int32_t size = static_cast<int32_t>(func.params.size() * 8);
 
     for (const auto& stmt : func.body) {
         if (dynamic_cast<VarDecl*>(stmt.get())) {
@@ -60,6 +60,36 @@ void CodeGenerator::generate_function(const Function& func) {
     }
 
     int32_t offset = -8;
+    for (size_t i = 0; i < func.params.size(); i++) {
+        LocalVar lv;
+        lv.stack_offset = offset;
+        lv.is_const = false;
+        lv.const_value = 0;
+        locals_[func.params[i].name] = lv;
+
+        switch (i) {
+            case 0:
+                emitter_.emit_mov_rbp_offset_rdi(offset);
+                break;
+            case 1:
+                emitter_.emit_mov_rbp_offset_rsi(offset);
+                break;
+            case 2:
+                emitter_.emit_mov_rbp_offset_rdx(offset);
+                break;
+            case 3:
+                emitter_.emit_mov_rbp_offset_rcx(offset);
+                break;
+            case 4:
+                emitter_.emit_mov_rbp_offset_r8(offset);
+                break;
+            case 5:
+                emitter_.emit_mov_rbp_offset_r9(offset);
+                break;
+        }
+        offset -= 8;
+    }
+
     for (const auto& stmt : func.body) {
         if (auto* var = dynamic_cast<VarDecl*>(stmt.get())) {
             LocalVar lv;
@@ -113,6 +143,33 @@ void CodeGenerator::generate_expression(const Expression* expr) {
             emitter_.emit_mov_rax_rbp_offset(lv.stack_offset);
         }
     } else if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
+        for (size_t i = call->args.size(); i > 0; i--) {
+            generate_expression(call->args[i - 1].get());
+            emitter_.emit_push_rax();
+        }
+        for (size_t i = 0; i < call->args.size(); i++) {
+            switch (i) {
+                case 0:
+                    emitter_.emit_pop_rdi();
+                    break;
+                case 1:
+                    emitter_.emit_pop_rsi();
+                    break;
+                case 2:
+                    emitter_.emit_pop_rdx();
+                    break;
+                case 3:
+                    emitter_.emit_pop_rcx();
+                    break;
+                case 4:
+                    emitter_.emit_pop_r8();
+                    break;
+                case 5:
+                    emitter_.emit_pop_r9();
+                    break;
+            }
+        }
+
         emitter_.emit_call_rel32(0);
 
         CallPatch patch;

@@ -12,6 +12,7 @@ namespace zex {
 
 struct FunctionInfo {
     std::string name;
+    std::vector<Type> param_types;
     Type return_type;
     size_t index;
 };

@@ -32,6 +32,8 @@ const char* token_type_to_string(TokenType type) {
             return ":";
         case TokenType::SEMICOLON:
             return ";";
+        case TokenType::COMMA:
+            return ",";
         case TokenType::ASSIGN:
             return "=";
         case TokenType::PLUS:
@@ -217,6 +219,10 @@ Token Lexer::scan_token() {
     if (c == ';') {
         advance();
         return make_token(TokenType::SEMICOLON);
+    }
+    if (c == ',') {
+        advance();
+        return make_token(TokenType::COMMA);
     }
 
     if (c == '+' && peek() == '=') {

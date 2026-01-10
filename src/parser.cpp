@@ -67,18 +67,36 @@ std::unique_ptr<Function> Parser::parse_function() {
     std::string name = previous().value;
 
     expect(TokenType::LPAREN, ErrorCode::UNEXPECTED_TOKEN);
+    auto params = parse_parameters();
     expect(TokenType::RPAREN, ErrorCode::UNEXPECTED_TOKEN);
     expect(TokenType::ARROW, ErrorCode::UNEXPECTED_TOKEN);
     Type return_type = parse_type();
     expect(TokenType::LBRACE, ErrorCode::UNEXPECTED_TOKEN);
 
-    auto func = std::make_unique<Function>(name, return_type);
+    auto func = std::make_unique<Function>(name, std::move(params), return_type);
     while (!check(TokenType::RBRACE) && !at_end()) {
         func->body.push_back(parse_statement());
     }
 
     expect(TokenType::RBRACE, ErrorCode::UNEXPECTED_TOKEN);
     return func;
+}
+
+std::vector<Parameter> Parser::parse_parameters() {
+    std::vector<Parameter> params;
+    if (check(TokenType::RPAREN)) {
+        return params;
+    }
+
+    do {
+        expect(TokenType::IDENTIFIER, ErrorCode::EXPECTED_IDENTIFIER);
+        std::string name = previous().value;
+        expect(TokenType::COLON, ErrorCode::UNEXPECTED_TOKEN);
+        Type type = parse_type();
+        params.emplace_back(name, type);
+    } while (match(TokenType::COMMA));
+
+    return params;
 }
 
 std::unique_ptr<Statement> Parser::parse_statement() {
@@ -201,8 +219,10 @@ std::unique_ptr<Expression> Parser::parse_primary() {
     if (match(TokenType::IDENTIFIER)) {
         std::string name = previous().value;
         if (match(TokenType::LPAREN)) {
+            auto call = std::make_unique<CallExpr>(name);
+            call->args = parse_arguments();
             expect(TokenType::RPAREN, ErrorCode::UNEXPECTED_TOKEN);
-            return std::make_unique<CallExpr>(name);
+            return call;
         }
         return std::make_unique<Identifier>(name);
     }
@@ -261,6 +281,19 @@ int64_t Parser::eval_const_expr(Expression* expr) {
     }
 
     throw error(ErrorCode::EXPECTED_EXPRESSION);
+}
+
+std::vector<std::unique_ptr<Expression>> Parser::parse_arguments() {
+    std::vector<std::unique_ptr<Expression>> args;
+    if (check(TokenType::RPAREN)) {
+        return args;
+    }
+
+    do {
+        args.push_back(parse_expression());
+    } while (match(TokenType::COMMA));
+
+    return args;
 }
 
 }  // namespace zex

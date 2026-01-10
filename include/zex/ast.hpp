@@ -24,6 +24,13 @@ struct Type {
 
 enum class BinaryOp { ADD, SUB, MUL, DIV, MOD };
 
+struct Parameter {
+    std::string name;
+    Type type;
+
+    Parameter(std::string n, Type t) : name(std::move(n)), type(t) {}
+};
+
 struct Expression {
     virtual ~Expression() = default;
 };
@@ -42,6 +49,7 @@ struct Identifier : Expression {
 
 struct CallExpr : Expression {
     std::string callee;
+    std::vector<std::unique_ptr<Expression>> args;
 
     explicit CallExpr(std::string name) : callee(std::move(name)) {}
 };
@@ -92,10 +100,12 @@ struct ReturnStmt : Statement {
 
 struct Function {
     std::string name;
+    std::vector<Parameter> params;
     Type return_type;
     std::vector<std::unique_ptr<Statement>> body;
 
-    Function(std::string n, Type ret) : name(std::move(n)), return_type(ret) {}
+    Function(std::string n, std::vector<Parameter> p, Type ret)
+        : name(std::move(n)), params(std::move(p)), return_type(ret) {}
 };
 
 struct Program {

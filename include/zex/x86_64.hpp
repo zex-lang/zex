@@ -26,10 +26,28 @@ class X86_64 {
 
     void emit_mov_rax_imm32(int32_t imm);
     void emit_mov_rdi_rax();
+    void emit_mov_rsi_rax();
+    void emit_mov_rdx_rax();
+    void emit_mov_rcx_rax();
+    void emit_mov_r8_rax();
+    void emit_mov_r9_rax();
+
+    void emit_mov_rbp_offset_rdi(int32_t offset);
+    void emit_mov_rbp_offset_rsi(int32_t offset);
+    void emit_mov_rbp_offset_rdx(int32_t offset);
+    void emit_mov_rbp_offset_rcx(int32_t offset);
+    void emit_mov_rbp_offset_r8(int32_t offset);
+    void emit_mov_rbp_offset_r9(int32_t offset);
+
     void emit_syscall();
 
     void emit_push_rax();
     void emit_pop_rcx();
+    void emit_pop_rdi();
+    void emit_pop_rsi();
+    void emit_pop_rdx();
+    void emit_pop_r8();
+    void emit_pop_r9();
     void emit_add_rax_rcx();
     void emit_sub_rax_rcx();
     void emit_imul_rax_rcx();
