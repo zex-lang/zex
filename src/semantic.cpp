@@ -153,8 +153,8 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
             analyze_expression(ret->value.get());
             Type expr_type = get_expression_type(ret->value.get());
             if (!types_compatible(current_return_type_, expr_type)) {
-                std::string msg = "expected " + type_to_string(current_return_type_) + " but got " +
-                                  type_to_string(expr_type);
+                std::string msg = "expected '" + type_to_string(current_return_type_) +
+                                  "' but got '" + type_to_string(expr_type) + "'";
                 throw CompileError(ErrorCode::INVALID_RETURN_TYPE, {}, msg);
             }
         } else if (current_return_type_.kind != TypeKind::VOID) {

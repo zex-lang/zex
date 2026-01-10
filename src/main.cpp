@@ -33,7 +33,7 @@ void print_error(const std::string& filename, const zex::CompileError& e) {
     }
     std::cerr << ": " << e.what();
     if (!e.context.empty()) {
-        std::cerr << " '" << e.context << "'";
+        std::cerr << " " << e.context;
     }
     std::cerr << "\n";
 }
