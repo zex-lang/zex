@@ -1,3 +1,6 @@
+// Zex code generator
+// Translates AST into x86_64 machine code
+
 #ifndef ZEX_CODEGEN_HPP
 #define ZEX_CODEGEN_HPP
 
@@ -11,11 +14,13 @@
 
 namespace zex {
 
+// Pending call instruction that needs address patching
 struct CallPatch {
     size_t call_site;
     std::string target;
 };
 
+// Local variable or constant in current function scope
 struct LocalVar {
     int32_t stack_offset;
     bool is_const;
@@ -23,20 +28,26 @@ struct LocalVar {
     Type type;
 };
 
+// Interned string literal with its code offset
 struct StringLiteralData {
     std::string value;
     size_t offset;
 };
 
+// Generates x86_64 machine code from the AST
 class CodeGenerator {
    public:
     CodeGenerator(SemanticAnalyzer& semantic);
+
+    // Generate code for entire program
     void generate(const Program& program);
 
+    // Access generated machine code
     const std::vector<uint8_t>& code() const {
         return emitter_.code();
     }
 
+    // Entry point offset in generated code
     size_t entry_offset() const {
         return entry_offset_;
     }

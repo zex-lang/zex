@@ -16,6 +16,29 @@ clang-format -i src/*.cpp include/zex/*.hpp
 - no trailing whitespace
 - blank line at end of file
 
+### Comments
+
+File header comments describe the module purpose:
+
+```cpp
+// Zex lexer
+// Converts source text into a stream of tokens
+```
+
+Inline comments explain non obvious logic:
+
+```cpp
+if (offset == 0 && base != 5) {  // RBP needs offset
+```
+
+Avoid these patterns in comments:
+
+- section headers like `// === Section ===`
+- dashes like `// --- separator ---`
+- parentheses in descriptions
+
+Keep comments concise and factual.
+
 ## Commit Messages
 
 ### Format

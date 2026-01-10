@@ -1,3 +1,6 @@
+// Zex error handling
+// Compile time error types and messages
+
 #ifndef ZEX_ERROR_HPP
 #define ZEX_ERROR_HPP
 
@@ -7,17 +10,23 @@
 
 namespace zex {
 
+// All compiler error codes
 enum class ErrorCode {
+    // File errors
     FILE_NOT_FOUND,
     FILE_WRITE_FAILED,
 
+    // Lexer errors
     UNEXPECTED_CHARACTER,
+
+    // Parser errors
     UNEXPECTED_TOKEN,
     EXPECTED_IDENTIFIER,
     EXPECTED_TYPE,
     EXPECTED_EXPRESSION,
     EXPECTED_STATEMENT,
 
+    // Semantic errors
     DUPLICATE_FUNCTION,
     DUPLICATE_VARIABLE,
     UNDEFINED_FUNCTION,
@@ -26,6 +35,7 @@ enum class ErrorCode {
     UNKNOWN_EXPRESSION
 };
 
+// Location in source code for error reporting
 struct SourceLocation {
     uint32_t line = 0;
     uint32_t column = 0;
@@ -34,6 +44,7 @@ struct SourceLocation {
     SourceLocation(uint32_t ln, uint32_t col) : line(ln), column(col) {}
 };
 
+// Exception thrown for all compilation errors
 class CompileError : public std::exception {
    public:
     ErrorCode code;

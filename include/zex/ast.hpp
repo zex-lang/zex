@@ -1,3 +1,6 @@
+// Zex Abstract Syntax Tree definitions
+// Represents the parsed program structure
+
 #ifndef ZEX_AST_HPP
 #define ZEX_AST_HPP
 
@@ -13,24 +16,24 @@ struct Statement;
 struct Function;
 struct Program;
 
+// All supported type kinds in the language
 enum class TypeKind { VOID, CHAR, I8, I16, I32, I64, F32, BOOL, POINTER, ARRAY };
 
+// Type representation with support for composite types like arrays and pointers
 struct Type {
     TypeKind kind;
-    std::unique_ptr<Type> element_type;  // For pointers and arrays
-    size_t array_size;                   // For arrays only
+    std::unique_ptr<Type> element_type;
+    size_t array_size;
 
     Type() : kind(TypeKind::I64), element_type(nullptr), array_size(0) {}
     explicit Type(TypeKind k) : kind(k), element_type(nullptr), array_size(0) {}
 
-    // Pointer type constructor
     static Type make_pointer(Type elem) {
         Type t(TypeKind::POINTER);
         t.element_type = std::make_unique<Type>(std::move(elem));
         return t;
     }
 
-    // Array type constructor
     static Type make_array(Type elem, size_t size) {
         Type t(TypeKind::ARRAY);
         t.element_type = std::make_unique<Type>(std::move(elem));
@@ -38,17 +41,14 @@ struct Type {
         return t;
     }
 
-    // Copy constructor
     Type(const Type& other) : kind(other.kind), array_size(other.array_size) {
         if (other.element_type) {
             element_type = std::make_unique<Type>(*other.element_type);
         }
     }
 
-    // Move constructor
     Type(Type&& other) noexcept = default;
 
-    // Copy assignment
     Type& operator=(const Type& other) {
         if (this != &other) {
             kind = other.kind;
@@ -62,9 +62,9 @@ struct Type {
         return *this;
     }
 
-    // Move assignment
     Type& operator=(Type&& other) noexcept = default;
 
+    // Returns size in bytes for this type
     size_t size() const {
         switch (kind) {
             case TypeKind::VOID:
@@ -104,10 +104,13 @@ struct Type {
     }
 };
 
+// Binary operation types
 enum class BinaryOp { ADD, SUB, MUL, DIV, MOD, EQ, NE, LT, GT, LE, GE, AND, OR };
 
+// Unary operation types including pointer operations
 enum class UnaryOp { NEG, NOT, POS, DEREF, ADDR };
 
+// Function parameter with name and type
 struct Parameter {
     std::string name;
     Type type;
@@ -115,6 +118,7 @@ struct Parameter {
     Parameter(std::string n, Type t) : name(std::move(n)), type(std::move(t)) {}
 };
 
+// Base class for all expression nodes
 struct Expression {
     virtual ~Expression() = default;
 };
@@ -150,6 +154,7 @@ struct ArrayLiteral : Expression {
         : elements(std::move(elems)) {}
 };
 
+// Compile time sizeof expression
 struct SizeofExpr : Expression {
     Type target_type;
     explicit SizeofExpr(Type t) : target_type(std::move(t)) {}
@@ -166,6 +171,7 @@ struct CallExpr : Expression {
     explicit CallExpr(std::string name) : callee(std::move(name)) {}
 };
 
+// Array or pointer indexing expression
 struct IndexExpr : Expression {
     std::unique_ptr<Expression> array;
     std::unique_ptr<Expression> index;
@@ -187,10 +193,12 @@ struct BinaryExpr : Expression {
         : op(o), left(std::move(l)), right(std::move(r)) {}
 };
 
+// Base class for all statement nodes
 struct Statement {
     virtual ~Statement() = default;
 };
 
+// Compile time constant declaration
 struct ConstDecl : Statement {
     std::string name;
     Type type;
@@ -199,6 +207,7 @@ struct ConstDecl : Statement {
         : name(std::move(n)), type(std::move(t)), value(v) {}
 };
 
+// Variable declaration with initializer
 struct VarDecl : Statement {
     std::string name;
     Type type;
@@ -207,6 +216,7 @@ struct VarDecl : Statement {
         : name(std::move(n)), type(std::move(t)), initializer(std::move(init)) {}
 };
 
+// Simple variable assignment
 struct AssignStmt : Statement {
     std::string name;
     std::unique_ptr<Expression> value;
@@ -214,6 +224,7 @@ struct AssignStmt : Statement {
         : name(std::move(n)), value(std::move(v)) {}
 };
 
+// Array element assignment
 struct IndexAssignStmt : Statement {
     std::unique_ptr<Expression> target;
     std::unique_ptr<Expression> value;
@@ -235,6 +246,7 @@ struct IfStmt : Statement {
         : condition(std::move(cond)), then_body(std::move(tb)), else_body(std::move(eb)) {}
 };
 
+// Function definition with parameters and body
 struct Function {
     std::string name;
     std::vector<Parameter> params;
@@ -244,6 +256,7 @@ struct Function {
         : name(std::move(n)), params(std::move(p)), return_type(std::move(ret)) {}
 };
 
+// Top level program containing all functions
 struct Program {
     std::vector<std::unique_ptr<Function>> functions;
 };

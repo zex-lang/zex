@@ -1,3 +1,6 @@
+// Zex semantic analyzer
+// Validates program semantics and collects symbol information
+
 #ifndef ZEX_SEMANTIC_HPP
 #define ZEX_SEMANTIC_HPP
 
@@ -10,6 +13,7 @@
 
 namespace zex {
 
+// Information about a declared function
 struct FunctionInfo {
     std::string name;
     std::vector<Type> param_types;
@@ -17,6 +21,7 @@ struct FunctionInfo {
     size_t index;
 };
 
+// Information about a local variable or constant
 struct VariableInfo {
     std::string name;
     Type type;
@@ -25,9 +30,13 @@ struct VariableInfo {
     int64_t const_value;
 };
 
+// Performs semantic analysis including name resolution and type checking
 class SemanticAnalyzer {
    public:
+    // Analyze entire program for semantic errors
     void analyze(Program& program);
+
+    // Symbol table access
     const FunctionInfo* get_function(const std::string& name) const;
     const std::vector<FunctionInfo>& get_functions() const {
         return functions_;

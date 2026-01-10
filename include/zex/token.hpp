@@ -1,3 +1,6 @@
+// Zex token definitions
+// All lexical tokens recognized by the compiler
+
 #ifndef ZEX_TOKEN_HPP
 #define ZEX_TOKEN_HPP
 
@@ -6,7 +9,9 @@
 
 namespace zex {
 
+// All token types recognized by the lexer
 enum class TokenType {
+    // Keywords
     KW_FUN,
     KW_VAR,
     KW_CONST,
@@ -25,6 +30,7 @@ enum class TokenType {
     KW_ELSE,
     KW_SIZEOF,
 
+    // Delimiters
     LPAREN,
     RPAREN,
     LBRACE,
@@ -37,6 +43,7 @@ enum class TokenType {
     COMMA,
     ASSIGN,
 
+    // Operators
     PLUS,
     MINUS,
     STAR,
@@ -45,6 +52,7 @@ enum class TokenType {
     BANG,
     AMPERSAND,
 
+    // Comparison
     EQ,
     NE,
     LT,
@@ -52,25 +60,30 @@ enum class TokenType {
     LE,
     GE,
 
+    // Logical
     AND,
     OR,
 
+    // Compound assignment
     PLUS_ASSIGN,
     MINUS_ASSIGN,
     STAR_ASSIGN,
     SLASH_ASSIGN,
     PERCENT_ASSIGN,
 
+    // Literals and identifiers
     IDENTIFIER,
     INT_LITERAL,
     FLOAT_LITERAL,
     CHAR_LITERAL,
     STRING_LITERAL,
 
+    // Special
     END_OF_FILE,
     INVALID
 };
 
+// Single token with type, value and source location
 struct Token {
     TokenType type;
     std::string value;
@@ -83,6 +96,7 @@ struct Token {
     Token() : type(TokenType::INVALID), value(""), line(0), column(0) {}
 };
 
+// Returns string representation of token type for debugging
 const char* token_type_to_string(TokenType type);
 
 }  // namespace zex

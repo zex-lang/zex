@@ -1,3 +1,6 @@
+// Zex ELF writer
+// Outputs executable ELF64 binaries for Linux x86_64
+
 #ifndef ZEX_ELF_HPP
 #define ZEX_ELF_HPP
 
@@ -7,14 +10,20 @@
 
 namespace zex {
 
+// Writes ELF64 executable files
 class ELFWriter {
    public:
+    // Base virtual address for the executable
     static constexpr uint64_t BASE_ADDR = 0x400000;
+
+    // Combined ELF header and program header size
     static constexpr size_t HEADER_SIZE = 64 + 56;
 
+    // Write complete ELF executable to file
     void write(const std::string& filename, const std::vector<uint8_t>& code, size_t entry_offset);
 
    private:
+    // ELF magic bytes and constants
     static constexpr uint8_t ELFMAG0 = 0x7f;
     static constexpr uint8_t ELFMAG1 = 'E';
     static constexpr uint8_t ELFMAG2 = 'L';

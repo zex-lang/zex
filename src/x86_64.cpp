@@ -99,7 +99,7 @@ void X86_64::mov(Reg dst, int32_t imm) {
     if (needs_rex_r(dst)) {
         emit8(0x41);
     }
-    emit8(0xB8 + reg_num(dst));  // MOV r32, imm32 (zero-extends)
+    emit8(0xB8 + reg_num(dst));  // MOV r32, imm32
     emit32(imm);
 }
 

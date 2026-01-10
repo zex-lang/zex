@@ -1,3 +1,6 @@
+// Zex lexer
+// Converts source text into a stream of tokens
+
 #ifndef ZEX_LEXER_HPP
 #define ZEX_LEXER_HPP
 
@@ -9,9 +12,12 @@
 
 namespace zex {
 
+// Lexical analyzer that tokenizes source code
 class Lexer {
    public:
     explicit Lexer(std::string_view source);
+
+    // Tokenize entire source and return token list
     std::vector<Token> tokenize();
 
    private:
