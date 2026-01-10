@@ -538,7 +538,20 @@ Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
 }
 
 void CodeGenerator::generate_asm_block(const AsmBlock* block) {
-    for (const auto& instr : block->instructions) {
+    // Track label byte offsets and jumps that need patching
+    std::unordered_map<std::string, size_t> label_offsets;
+    std::vector<std::tuple<size_t, std::string, size_t>> jump_patches;
+
+    // Emit all instructions, record labels and jumps
+    for (size_t i = 0; i < block->instructions.size(); i++) {
+        // Record label offset if this instruction has one
+        for (const auto& [label_name, instr_idx] : block->labels) {
+            if (instr_idx == i) {
+                label_offsets[label_name] = emitter_.current_offset();
+            }
+        }
+
+        const auto& instr = block->instructions[i];
         const auto& ops = instr.operands;
 
         switch (instr.opcode) {
@@ -633,7 +646,13 @@ void CodeGenerator::generate_asm_block(const AsmBlock* block) {
                 break;
             case AsmOpcode::CMP:
                 if (ops.size() == 2) {
-                    emitter_.cmp(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                    if (ops[0].kind == AsmOperandKind::REG && ops[1].kind == AsmOperandKind::REG) {
+                        emitter_.cmp(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
+                    } else if (ops[0].kind == AsmOperandKind::REG &&
+                               ops[1].kind == AsmOperandKind::IMM) {
+                        emitter_.cmp_imm(asm_reg_to_reg(ops[0].reg),
+                                         static_cast<int32_t>(ops[1].imm));
+                    }
                 }
                 break;
             case AsmOpcode::PUSH:
@@ -699,8 +718,68 @@ void CodeGenerator::generate_asm_block(const AsmBlock* block) {
                     emitter_.setcc(Cond::GE, asm_reg_to_reg(ops[0].reg));
                 }
                 break;
+            case AsmOpcode::JMP:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jmp(0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JE:
+            case AsmOpcode::JZ:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::Z, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JNE:
+            case AsmOpcode::JNZ:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::NE, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JL:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::L, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JG:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::G, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JLE:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::LE, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
+            case AsmOpcode::JGE:
+                if (ops.size() == 1 && ops[0].kind == AsmOperandKind::LABEL) {
+                    emitter_.jcc(Cond::GE, 0);
+                    size_t patch_loc = emitter_.current_offset() - 4;
+                    jump_patches.push_back({patch_loc, ops[0].var_name, emitter_.current_offset()});
+                }
+                break;
             default:
                 break;
+        }
+    }
+
+    // Patch all jump addresses
+    for (const auto& [patch_loc, label_name, after_jmp] : jump_patches) {
+        auto it = label_offsets.find(label_name);
+        if (it != label_offsets.end()) {
+            int32_t rel = static_cast<int32_t>(it->second - after_jmp);
+            emitter_.patch_rel32(patch_loc, rel);
         }
     }
 }

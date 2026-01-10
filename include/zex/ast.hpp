@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace zex {
@@ -292,7 +293,7 @@ enum class AsmOpcode {
 };
 
 // Operand types for assembly instructions
-enum class AsmOperandKind { REG, IMM, MEM, VAR };
+enum class AsmOperandKind { REG, IMM, MEM, VAR, LABEL };
 
 // Register encoding for asm operands
 enum class AsmReg : uint8_t {
@@ -392,6 +393,13 @@ struct AsmOperand {
         op.mem_offset = offset;
         return op;
     }
+
+    static AsmOperand make_label(const std::string& name) {
+        AsmOperand op;
+        op.kind = AsmOperandKind::LABEL;
+        op.var_name = name;
+        return op;
+    }
 };
 
 // Single assembly instruction with opcode and operands
@@ -403,6 +411,7 @@ struct AsmInstruction {
 // Inline assembly block statement
 struct AsmBlock : Statement {
     std::vector<AsmInstruction> instructions;
+    std::unordered_map<std::string, size_t> labels;
 };
 
 // Function definition with parameters and body

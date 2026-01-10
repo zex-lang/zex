@@ -213,6 +213,19 @@ void X86_64::cmp(Reg a, Reg b) {
     emit_modrm_reg(b, a);
 }
 
+void X86_64::cmp_imm(Reg a, int32_t imm) {
+    emit_rex_single(true, a);
+    if (imm >= -128 && imm <= 127) {
+        emit8(0x83);  // CMP r/m64, imm8
+        emit_modrm(0b11, 7, reg_num(a));
+        emit8(static_cast<uint8_t>(imm));
+    } else {
+        emit8(0x81);  // CMP r/m64, imm32
+        emit_modrm(0b11, 7, reg_num(a));
+        emit32(imm);
+    }
+}
+
 void X86_64::push(Reg reg) {
     if (needs_rex_r(reg)) {
         emit8(0x41);

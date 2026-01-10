@@ -40,7 +40,8 @@ bool Parser::match(TokenType type) {
 
 CompileError Parser::error(ErrorCode code) {
     const Token& tok = peek();
-    return CompileError(code, {tok.line, tok.column}, tok.value);
+    std::string ctx = std::string("'") + token_type_to_string(tok.type) + "'";
+    return CompileError(code, {tok.line, tok.column}, ctx);
 }
 
 CompileError Parser::error(ErrorCode code, const std::string& ctx) {
@@ -641,15 +642,28 @@ std::unique_ptr<AsmBlock> Parser::parse_asm_block() {
         expect(TokenType::IDENTIFIER, ErrorCode::UNEXPECTED_TOKEN);
         std::string mnemonic = previous().value;
 
+        // Check for label definition
+        if (match(TokenType::COLON)) {
+            block->labels[mnemonic] = block->instructions.size();
+            continue;
+        }
+
         auto op_it = opcodes.find(mnemonic);
         if (op_it == opcodes.end()) {
-            throw error(ErrorCode::UNEXPECTED_TOKEN, mnemonic);
+            throw error(ErrorCode::UNEXPECTED_TOKEN, "'" + mnemonic + "'");
         }
 
         AsmInstruction instr;
         instr.opcode = op_it->second;
 
-        // Parse operands until we see another mnemonic or end of block
+        // Check if this is a jump instruction
+        bool is_jump = (instr.opcode == AsmOpcode::JMP || instr.opcode == AsmOpcode::JE ||
+                        instr.opcode == AsmOpcode::JNE || instr.opcode == AsmOpcode::JL ||
+                        instr.opcode == AsmOpcode::JG || instr.opcode == AsmOpcode::JLE ||
+                        instr.opcode == AsmOpcode::JGE || instr.opcode == AsmOpcode::JZ ||
+                        instr.opcode == AsmOpcode::JNZ);
+
+        // Parse operands
         while (!check(TokenType::RBRACE)) {
             if (check(TokenType::INT_LITERAL)) {
                 advance();
@@ -667,13 +681,20 @@ std::unique_ptr<AsmBlock> Parser::parse_asm_block() {
                     break;
                 }
                 if (opcodes.find(name) != opcodes.end() && instr.operands.empty()) {
-                    // Zero operand instruction like syscall, ret, cqo
                     break;
                 }
                 advance();
+                // Check for label definition
+                if (check(TokenType::COLON)) {
+                    // Put the name back as a label, will be handled next iteration
+                    current_--;
+                    break;
+                }
                 auto reg_it = registers.find(name);
                 if (reg_it != registers.end()) {
                     instr.operands.push_back(AsmOperand::make_reg(reg_it->second));
+                } else if (is_jump) {
+                    instr.operands.push_back(AsmOperand::make_label(name));
                 } else {
                     instr.operands.push_back(AsmOperand::make_var(name));
                 }

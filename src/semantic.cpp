@@ -62,7 +62,7 @@ void SemanticAnalyzer::register_functions(Program& program) {
     size_t index = 0;
     for (auto& func : program.functions) {
         if (function_table_.find(func->name) != function_table_.end()) {
-            throw CompileError(ErrorCode::DUPLICATE_FUNCTION, {}, func->name);
+            throw CompileError(ErrorCode::DUPLICATE_FUNCTION, {}, "'" + func->name + "'");
         }
 
         FunctionInfo info;
@@ -87,7 +87,7 @@ void SemanticAnalyzer::analyze_function(Function& func) {
 
     for (const auto& param : func.params) {
         if (local_variables_.find(param.name) != local_variables_.end()) {
-            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, param.name);
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, "'" + param.name + "'");
         }
 
         VariableInfo info;
@@ -109,7 +109,7 @@ void SemanticAnalyzer::analyze_function(Function& func) {
 void SemanticAnalyzer::analyze_statement(Statement* stmt) {
     if (auto* var_decl = dynamic_cast<VarDecl*>(stmt)) {
         if (local_variables_.find(var_decl->name) != local_variables_.end()) {
-            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, var_decl->name);
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, "'" + var_decl->name + "'");
         }
 
         analyze_expression(var_decl->initializer.get());
@@ -125,7 +125,7 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         local_variables_[var_decl->name] = info;
     } else if (auto* const_decl = dynamic_cast<ConstDecl*>(stmt)) {
         if (local_variables_.find(const_decl->name) != local_variables_.end()) {
-            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, const_decl->name);
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, "'" + const_decl->name + "'");
         }
 
         VariableInfo info;
@@ -139,10 +139,10 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
     } else if (auto* assign = dynamic_cast<AssignStmt*>(stmt)) {
         auto it = local_variables_.find(assign->name);
         if (it == local_variables_.end()) {
-            throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, assign->name);
+            throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, "'" + assign->name + "'");
         }
         if (it->second.is_const) {
-            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, assign->name);
+            throw CompileError(ErrorCode::DUPLICATE_VARIABLE, {}, "'" + assign->name + "'");
         }
         analyze_expression(assign->value.get());
     } else if (auto* idx_assign = dynamic_cast<IndexAssignStmt*>(stmt)) {
@@ -174,7 +174,8 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
             for (const auto& op : instr.operands) {
                 if (op.kind == AsmOperandKind::VAR) {
                     if (local_variables_.find(op.var_name) == local_variables_.end()) {
-                        throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, op.var_name);
+                        throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {},
+                                           "'" + op.var_name + "'");
                     }
                 }
             }
@@ -224,14 +225,14 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
 
     if (auto* ident = dynamic_cast<Identifier*>(expr)) {
         if (local_variables_.find(ident->name) == local_variables_.end()) {
-            throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, ident->name);
+            throw CompileError(ErrorCode::UNDEFINED_VARIABLE, {}, "'" + ident->name + "'");
         }
         return;
     }
 
     if (auto* call = dynamic_cast<CallExpr*>(expr)) {
         if (function_table_.find(call->callee) == function_table_.end()) {
-            throw CompileError(ErrorCode::UNDEFINED_FUNCTION, {}, call->callee);
+            throw CompileError(ErrorCode::UNDEFINED_FUNCTION, {}, "'" + call->callee + "'");
         }
         for (auto& arg : call->args) {
             analyze_expression(arg.get());

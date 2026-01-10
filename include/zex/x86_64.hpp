@@ -110,6 +110,7 @@ class X86_64 {
     void or_(Reg dst, Reg src);
     void test(Reg a, Reg b);
     void cmp(Reg a, Reg b);
+    void cmp_imm(Reg a, int32_t imm);
 
     // Stack operations
     void push(Reg reg);
