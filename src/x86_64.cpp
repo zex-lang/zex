@@ -288,6 +288,12 @@ void X86_64::movzx(Reg dst, Reg src8) {
     emit_modrm_reg(dst, src8);
 }
 
+void X86_64::movsx(Reg dst, Reg src) {
+    emit_rex(true, dst, src);
+    emit8(0x63);  // MOVSXD r64, r/m32
+    emit_modrm_reg(dst, src);
+}
+
 void X86_64::syscall() {
     emit8(0x0F);
     emit8(0x05);  // SYSCALL
@@ -402,6 +408,22 @@ void X86_64::xorps(Reg dst, Reg src) {
     emit8(0x0F);
     emit8(0x57);  // XORPS xmm, xmm
     emit_modrm_reg(dst, src);
+}
+
+void X86_64::cvtsi2ss(Reg xmm, Reg r64) {
+    emit8(0xF3);
+    emit_rex(true, xmm, r64);
+    emit8(0x0F);
+    emit8(0x2A);  // CVTSI2SS xmm, r/m64
+    emit_modrm_reg(xmm, r64);
+}
+
+void X86_64::cvttss2si(Reg r64, Reg xmm) {
+    emit8(0xF3);
+    emit_rex(true, r64, xmm);
+    emit8(0x0F);
+    emit8(0x2C);  // CVTTSS2SI r64, xmm
+    emit_modrm_reg(r64, xmm);
 }
 
 }  // namespace zex

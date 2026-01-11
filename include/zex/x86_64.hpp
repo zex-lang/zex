@@ -125,6 +125,7 @@ class X86_64 {
     // Conditional byte set
     void setcc(Cond cc, Reg dst);
     void movzx(Reg dst, Reg src8);
+    void movsx(Reg dst, Reg src);  // sign extend
 
     // System calls
     void syscall();
@@ -140,6 +141,8 @@ class X86_64 {
     void mulss(Reg dst, Reg src);
     void divss(Reg dst, Reg src);
     void xorps(Reg dst, Reg src);
+    void cvtsi2ss(Reg xmm, Reg r64);   // int to float
+    void cvttss2si(Reg r64, Reg xmm);  // float to int
 
     // Utilities for patching and code access
     size_t current_offset() const {

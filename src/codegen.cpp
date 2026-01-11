@@ -37,12 +37,17 @@ int32_t CodeGenerator::calculate_stack_size(const Function& func) {
     int32_t size = 0;
 
     for (const auto& param : func.params) {
-        size += static_cast<int32_t>(param.type.size());
+        size += 8;  // use 8 bytes per param for alignment
+        (void)param;  // suppress unused warning
     }
 
     for (const auto& stmt : func.body) {
         if (auto* var_decl = dynamic_cast<VarDecl*>(stmt.get())) {
-            size += static_cast<int32_t>(var_decl->type.size());
+            if (var_decl->type.kind == TypeKind::ARRAY) {
+                size += static_cast<int32_t>(var_decl->type.size());
+            } else {
+                size += 8;  // 8 bytes per scalar for alignment
+            }
         }
     }
 
@@ -69,7 +74,7 @@ void CodeGenerator::generate_function(const Function& func) {
     int32_t offset = -8;
     Reg arg_regs[] = {Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg::R9};
 
-    for (size_t i = 0; i < func.params.size() && i < 6; i++) {
+    for (size_t i = 0; i < func.params.size(); i++) {
         const auto& param = func.params[i];
         LocalVar lv;
         lv.stack_offset = offset;
@@ -77,10 +82,16 @@ void CodeGenerator::generate_function(const Function& func) {
         lv.const_value = 0;
         lv.type = param.type;
 
-        emitter_.mov(Mem(Reg::RBP, offset), arg_regs[i]);
+        if (i < 6) {
+            emitter_.mov(Mem(Reg::RBP, offset), arg_regs[i]);
+        } else {
+            int32_t stack_param_offset = 16 + static_cast<int32_t>((i - 6) * 8);
+            emitter_.mov(Reg::RAX, Mem(Reg::RBP, stack_param_offset));
+            emitter_.mov(Mem(Reg::RBP, offset), Reg::RAX);
+        }
 
         locals_[param.name] = lv;
-        offset -= static_cast<int32_t>(param.type.size());
+        offset -= 8;  // use 8 bytes per param for alignment
     }
 
     for (const auto& stmt : func.body) {
@@ -117,38 +128,51 @@ void CodeGenerator::generate_function(const Function& func) {
 
 void CodeGenerator::generate_statement(const Statement* stmt) {
     if (auto* var_decl = dynamic_cast<const VarDecl*>(stmt)) {
-        generate_expression(var_decl->initializer.get());
         int32_t offset = locals_[var_decl->name].stack_offset;
-        emitter_.mov(Mem(Reg::RBP, offset), Reg::RAX);
+
+        if (auto* arr_lit = dynamic_cast<ArrayLiteral*>(var_decl->initializer.get())) {
+            size_t elem_size = 8;
+            if (var_decl->type.kind == TypeKind::ARRAY && var_decl->type.element_type) {
+                elem_size = var_decl->type.element_type->size();
+            }
+            for (size_t i = 0; i < arr_lit->elements.size(); i++) {
+                generate_expression(arr_lit->elements[i].get());
+                int32_t elem_offset = offset + static_cast<int32_t>(i * elem_size);
+                emitter_.mov(Mem(Reg::RBP, elem_offset), Reg::RAX);
+            }
+        } else {
+            generate_expression(var_decl->initializer.get());
+            emitter_.mov(Mem(Reg::RBP, offset), Reg::RAX);
+        }
     } else if (auto* assign = dynamic_cast<const AssignStmt*>(stmt)) {
         generate_expression(assign->value.get());
         int32_t offset = locals_[assign->name].stack_offset;
         emitter_.mov(Mem(Reg::RBP, offset), Reg::RAX);
     } else if (auto* idx_assign = dynamic_cast<const IndexAssignStmt*>(stmt)) {
-        generate_expression(idx_assign->value.get());
-        emitter_.push(Reg::RAX);
+        if (auto* idx_expr = dynamic_cast<IndexExpr*>(idx_assign->target.get())) {
+            generate_expression(idx_assign->value.get());
+            emitter_.push(Reg::RAX);  // save value
 
-        auto* idx_expr = dynamic_cast<IndexExpr*>(idx_assign->target.get());
-        if (auto* ident = dynamic_cast<Identifier*>(idx_expr->array.get())) {
-            const LocalVar& lv = locals_[ident->name];
+            if (auto* ident = dynamic_cast<Identifier*>(idx_expr->array.get())) {
+                const LocalVar& lv = locals_[ident->name];
 
-            emitter_.mov(Reg::RAX, static_cast<int64_t>(lv.stack_offset));
-            emitter_.push(Reg::RAX);
+                generate_expression(idx_expr->index.get());
 
-            generate_expression(idx_expr->index.get());
+                size_t elem_size = 8;
+                if (lv.type.kind == TypeKind::ARRAY && lv.type.element_type) {
+                    elem_size = lv.type.element_type->size();
+                }
 
-            if (lv.type.kind == TypeKind::ARRAY && lv.type.element_type) {
-                size_t elem_size = lv.type.element_type->size();
                 emitter_.mov(Reg::RCX, Reg::RAX);
                 emitter_.mov(Reg::RAX, static_cast<int64_t>(elem_size));
-                emitter_.imul(Reg::RAX, Reg::RCX);
+                emitter_.imul(Reg::RAX, Reg::RCX);  // RAX = index * elem_size
+
+                emitter_.lea(Reg::RCX, Mem(Reg::RBP, lv.stack_offset));  // base address
+                emitter_.add(Reg::RCX, Reg::RAX);  // RCX = element address
+
+                emitter_.pop(Reg::RAX);  // restore value
+                emitter_.mov(Mem(Reg::RCX, 0), Reg::RAX);  // store value
             }
-
-            emitter_.pop(Reg::RCX);
-            emitter_.add(Reg::RAX, Reg::RCX);
-
-            emitter_.mov(Reg::RCX, Reg::RAX);
-            emitter_.pop(Reg::RAX);
         }
     } else if (auto* ret = dynamic_cast<const ReturnStmt*>(stmt)) {
         if (ret->value) {
@@ -263,21 +287,18 @@ void CodeGenerator::generate_expression(const Expression* expr) {
 
             generate_expression(idx->index.get());
 
+            size_t elem_size = 8;
             if (lv.type.kind == TypeKind::ARRAY && lv.type.element_type) {
-                size_t elem_size = lv.type.element_type->size();
-                emitter_.mov(Reg::RCX, Reg::RAX);
-                emitter_.mov(Reg::RAX, static_cast<int64_t>(elem_size));
-                emitter_.imul(Reg::RAX, Reg::RCX);
+                elem_size = lv.type.element_type->size();
             }
 
             emitter_.mov(Reg::RCX, Reg::RAX);
-            emitter_.mov(Reg::RAX, static_cast<int64_t>(lv.stack_offset));
-            emitter_.add(Reg::RAX, Reg::RCX);
+            emitter_.mov(Reg::RAX, static_cast<int64_t>(elem_size));
+            emitter_.imul(Reg::RAX, Reg::RCX);  // RAX = index * elem_size
 
-            emitter_.mov(Reg::RCX, Reg::RAX);
-            emitter_.mov(Reg::RAX, Mem(Reg::RBP, 0));
-            emitter_.add(Reg::RAX, Reg::RCX);
-            emitter_.mov(Reg::RAX, Mem(Reg::RBP, 0));
+            emitter_.lea(Reg::RCX, Mem(Reg::RBP, lv.stack_offset));  // base address
+            emitter_.add(Reg::RAX, Reg::RCX);  // RAX = element address
+            emitter_.mov(Reg::RAX, Mem(Reg::RAX, 0));  // load element
         }
     } else if (auto* ident = dynamic_cast<const Identifier*>(expr)) {
         const LocalVar& lv = locals_[ident->name];
@@ -311,12 +332,28 @@ void CodeGenerator::generate_expression(const Expression* expr) {
         }
     } else if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
         Reg arg_regs[] = {Reg::RDI, Reg::RSI, Reg::RDX, Reg::RCX, Reg::R8, Reg::R9};
+        size_t num_args = call->args.size();
+        size_t stack_args = num_args > 6 ? num_args - 6 : 0;
 
-        for (size_t i = call->args.size(); i > 0; i--) {
+        // Align stack for call: RSP must be 16-byte aligned before CALL
+        // Push extra 8 bytes if stack_args is odd to maintain alignment
+        bool need_align = (stack_args % 2) == 1;
+        if (need_align) {
+            emitter_.sub(Reg::RSP, 8);
+        }
+
+        // Push stack arguments (args 7+) in reverse order
+        for (size_t i = num_args; i > 6; i--) {
             generate_expression(call->args[i - 1].get());
             emitter_.push(Reg::RAX);
         }
-        for (size_t i = 0; i < call->args.size() && i < 6; i++) {
+
+        // Push first 6 args then pop into registers
+        for (size_t i = std::min(num_args, size_t(6)); i > 0; i--) {
+            generate_expression(call->args[i - 1].get());
+            emitter_.push(Reg::RAX);
+        }
+        for (size_t i = 0; i < num_args && i < 6; i++) {
             emitter_.pop(arg_regs[i]);
         }
 
@@ -326,6 +363,13 @@ void CodeGenerator::generate_expression(const Expression* expr) {
         patch.call_site = emitter_.current_offset() - 4;
         patch.target = call->callee;
         call_patches_.push_back(patch);
+
+        // Clean up stack args
+        if (stack_args > 0 || need_align) {
+            int32_t cleanup = static_cast<int32_t>(stack_args * 8);
+            if (need_align) cleanup += 8;
+            emitter_.add(Reg::RSP, cleanup);
+        }
     } else if (auto* binary = dynamic_cast<const BinaryExpr*>(expr)) {
         if (binary->op == BinaryOp::AND) {
             generate_expression(binary->left.get());
@@ -417,6 +461,15 @@ void CodeGenerator::generate_expression(const Expression* expr) {
         }
     } else if (auto* cast = dynamic_cast<const CastExpr*>(expr)) {
         generate_expression(cast->expr.get());
+
+        Type from_type = semantic_.get_expression_type(cast->expr.get());
+        const Type& to_type = cast->target_type;
+
+        if (from_type.kind == TypeKind::F32 && to_type.kind != TypeKind::F32) {
+            emitter_.cvttss2si(Reg::RAX, Reg::XMM0);
+        } else if (from_type.kind != TypeKind::F32 && to_type.kind == TypeKind::F32) {
+            emitter_.cvtsi2ss(Reg::XMM0, Reg::RAX);
+        }
     }
 }
 

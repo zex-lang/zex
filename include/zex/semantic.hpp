@@ -43,6 +43,9 @@ class SemanticAnalyzer {
     }
     const VariableInfo* get_variable(const std::string& name) const;
 
+    // Type inference
+    Type get_expression_type(Expression* expr);
+
    private:
     std::unordered_map<std::string, FunctionInfo> function_table_;
     std::vector<FunctionInfo> functions_;
@@ -54,7 +57,6 @@ class SemanticAnalyzer {
     void analyze_function(Function& func);
     void analyze_statement(Statement* stmt);
     void analyze_expression(Expression* expr);
-    Type get_expression_type(Expression* expr);
 };
 
 }  // namespace zex
