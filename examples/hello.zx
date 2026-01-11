@@ -1,0 +1,18 @@
+fun write(fd: i64, buf: *char, len: i64) -> i64 {
+    var result: i64 = 0;
+    asm {
+        mov rax 1
+        mov rdi fd
+        mov rsi buf
+        mov rdx len
+        syscall
+        mov result rax
+    }
+    return result;
+}
+
+fun main() -> i32 {
+    var msg: *char = "Hello, Zex!\n";
+    write(1, msg, 12);
+    return 0;
+}
