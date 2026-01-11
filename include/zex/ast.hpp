@@ -194,6 +194,13 @@ struct BinaryExpr : Expression {
         : op(o), left(std::move(l)), right(std::move(r)) {}
 };
 
+// Explicit type cast using 'as' keyword
+struct CastExpr : Expression {
+    std::unique_ptr<Expression> expr;
+    Type target_type;
+    CastExpr(std::unique_ptr<Expression> e, Type t) : expr(std::move(e)), target_type(std::move(t)) {}
+};
+
 // Base class for all statement nodes
 struct Statement {
     virtual ~Statement() = default;

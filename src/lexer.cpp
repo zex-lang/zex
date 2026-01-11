@@ -116,6 +116,8 @@ const char* token_type_to_string(TokenType type) {
             return "string";
         case TokenType::KW_ASM:
             return "asm";
+        case TokenType::KW_AS:
+            return "as";
         case TokenType::END_OF_FILE:
             return "eof";
         case TokenType::INVALID:
@@ -240,7 +242,8 @@ TokenType Lexer::check_keyword(const std::string& word) const {
         {"f32", TokenType::KW_F32},       {"bool", TokenType::KW_BOOL},
         {"true", TokenType::KW_TRUE},     {"false", TokenType::KW_FALSE},
         {"if", TokenType::KW_IF},         {"else", TokenType::KW_ELSE},
-        {"sizeof", TokenType::KW_SIZEOF}, {"asm", TokenType::KW_ASM}};
+        {"sizeof", TokenType::KW_SIZEOF}, {"asm", TokenType::KW_ASM},
+        {"as", TokenType::KW_AS}};
 
     auto it = keywords.find(word);
     if (it != keywords.end()) {

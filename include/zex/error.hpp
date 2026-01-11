@@ -35,7 +35,8 @@ enum class ErrorCode {
     UNKNOWN_EXPRESSION,
     TYPE_MISMATCH,
     INVALID_RETURN_TYPE,
-    INVALID_OPERAND_TYPES
+    INVALID_OPERAND_TYPES,
+    IMPLICIT_NARROWING
 };
 
 // Location in source code for error reporting
@@ -97,6 +98,8 @@ class CompileError : public std::exception {
                 return "return type does not match function";
             case ErrorCode::INVALID_OPERAND_TYPES:
                 return "invalid operand types for operation";
+            case ErrorCode::IMPLICIT_NARROWING:
+                return "implicit narrowing conversion, use 'as' for explicit cast";
         }
         return "unknown error";
     }

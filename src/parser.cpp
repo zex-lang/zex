@@ -351,6 +351,9 @@ std::unique_ptr<Expression> Parser::parse_postfix() {
             auto index = parse_expression();
             expect(TokenType::RBRACKET, ErrorCode::UNEXPECTED_TOKEN);
             expr = std::make_unique<IndexExpr>(std::move(expr), std::move(index));
+        } else if (match(TokenType::KW_AS)) {
+            Type target = parse_type();
+            expr = std::make_unique<CastExpr>(std::move(expr), std::move(target));
         } else {
             break;
         }

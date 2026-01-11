@@ -415,6 +415,8 @@ void CodeGenerator::generate_expression(const Expression* expr) {
             case BinaryOp::OR:
                 break;
         }
+    } else if (auto* cast = dynamic_cast<const CastExpr*>(expr)) {
+        generate_expression(cast->expr.get());
     }
 }
 

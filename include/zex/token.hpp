@@ -30,6 +30,7 @@ enum class TokenType {
     KW_ELSE,
     KW_SIZEOF,
     KW_ASM,
+    KW_AS,
 
     // Delimiters
     LPAREN,

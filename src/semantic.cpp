@@ -28,19 +28,65 @@ static std::string type_to_string(const Type& t) {
     return "unknown";
 }
 
-static bool is_integer_type(TypeKind k) {
-    return k == TypeKind::I8 || k == TypeKind::I16 || k == TypeKind::I32 || k == TypeKind::I64;
+
+static int type_rank(TypeKind k) {
+    switch (k) {
+        case TypeKind::BOOL:
+            return 0;
+        case TypeKind::CHAR:
+        case TypeKind::I8:
+            return 1;
+        case TypeKind::I16:
+            return 2;
+        case TypeKind::I32:
+            return 3;
+        case TypeKind::I64:
+            return 4;
+        default:
+            return -1;
+    }
+}
+
+static bool value_fits_in_type(int64_t value, TypeKind kind) {
+    switch (kind) {
+        case TypeKind::I8:
+            return value >= -128 && value <= 127;
+        case TypeKind::I16:
+            return value >= -32768 && value <= 32767;
+        case TypeKind::I32:
+            return value >= -2147483648LL && value <= 2147483647LL;
+        case TypeKind::I64:
+            return true;
+        case TypeKind::CHAR:
+            return value >= 0 && value <= 255;
+        case TypeKind::BOOL:
+            return value == 0 || value == 1;
+        default:
+            return false;
+    }
+}
+
+static bool can_implicit_convert(const Type& from, const Type& to) {
+    if (from.equals(to)) {
+        return true;
+    }
+
+    int from_rank = type_rank(from.kind);
+    int to_rank = type_rank(to.kind);
+
+    if (from_rank >= 0 && to_rank >= 0) {
+        return from_rank <= to_rank;
+    }
+
+    return false;
+}
+
+static bool can_literal_convert(int64_t value, const Type& to) {
+    return value_fits_in_type(value, to.kind);
 }
 
 static bool types_compatible(const Type& expected, const Type& actual) {
-    if (expected.equals(actual)) {
-        return true;
-    }
-    // Allow integer coercion
-    if (is_integer_type(expected.kind) && is_integer_type(actual.kind)) {
-        return true;
-    }
-    return false;
+    return can_implicit_convert(actual, expected);
 }
 
 void SemanticAnalyzer::analyze(Program& program) {
@@ -152,10 +198,18 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
         if (ret->value) {
             analyze_expression(ret->value.get());
             Type expr_type = get_expression_type(ret->value.get());
-            if (!types_compatible(current_return_type_, expr_type)) {
-                std::string msg = "expected '" + type_to_string(current_return_type_) +
-                                  "' but got '" + type_to_string(expr_type) + "'";
-                throw CompileError(ErrorCode::INVALID_RETURN_TYPE, {}, msg);
+
+            bool compatible = false;
+            if (auto* int_lit = dynamic_cast<IntLiteral*>(ret->value.get())) {
+                compatible = can_literal_convert(int_lit->value, current_return_type_);
+            } else {
+                compatible = types_compatible(current_return_type_, expr_type);
+            }
+
+            if (!compatible) {
+                std::string msg = "cannot convert '" + type_to_string(expr_type) +
+                                  "' to '" + type_to_string(current_return_type_) + "'";
+                throw CompileError(ErrorCode::IMPLICIT_NARROWING, {}, msg);
             }
         } else if (current_return_type_.kind != TypeKind::VOID) {
             throw CompileError(ErrorCode::INVALID_RETURN_TYPE, {},
@@ -251,6 +305,11 @@ void SemanticAnalyzer::analyze_expression(Expression* expr) {
         return;
     }
 
+    if (auto* cast = dynamic_cast<CastExpr*>(expr)) {
+        analyze_expression(cast->expr.get());
+        return;
+    }
+
     throw CompileError(ErrorCode::UNKNOWN_EXPRESSION, {});
 }
 
@@ -332,6 +391,9 @@ Type SemanticAnalyzer::get_expression_type(Expression* expr) {
     }
     if (dynamic_cast<SizeofExpr*>(expr)) {
         return Type(TypeKind::I64);
+    }
+    if (auto* cast = dynamic_cast<CastExpr*>(expr)) {
+        return cast->target_type;
     }
     return Type(TypeKind::I64);
 }
