@@ -73,6 +73,19 @@ void ELFWriter::write_program_header(std::vector<uint8_t>& output, size_t code_s
 
 void ELFWriter::write(const std::string& filename, const std::vector<uint8_t>& code,
                       size_t entry_offset) {
+    auto output = build(code, entry_offset);
+
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        throw CompileError(ErrorCode::FILE_WRITE_FAILED, {}, "'" + filename + "'");
+    }
+
+    file.write(reinterpret_cast<const char*>(output.data()), output.size());
+    file.close();
+    chmod(filename.c_str(), 0755);
+}
+
+std::vector<uint8_t> ELFWriter::build(const std::vector<uint8_t>& code, size_t entry_offset) {
     std::vector<uint8_t> output;
     output.reserve(HEADER_SIZE + code.size());
 
@@ -82,17 +95,7 @@ void ELFWriter::write(const std::string& filename, const std::vector<uint8_t>& c
     write_program_header(output, code.size());
     output.insert(output.end(), code.begin(), code.end());
 
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) {
-        throw CompileError(ErrorCode::FILE_WRITE_FAILED, {}, filename);
-    }
-
-    file.write(reinterpret_cast<const char*>(output.data()), output.size());
-    file.close();
-
-#ifdef __linux__
-    chmod(filename.c_str(), 0755);
-#endif
+    return output;
 }
 
 }  // namespace zex

@@ -22,6 +22,9 @@ class ELFWriter {
     // Write complete ELF executable to file
     void write(const std::string& filename, const std::vector<uint8_t>& code, size_t entry_offset);
 
+    // Build ELF binary in memory
+    std::vector<uint8_t> build(const std::vector<uint8_t>& code, size_t entry_offset);
+
    private:
     // ELF magic bytes and constants
     static constexpr uint8_t ELFMAG0 = 0x7f;
