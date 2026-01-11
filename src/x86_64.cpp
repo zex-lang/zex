@@ -279,13 +279,10 @@ void X86_64::setcc(Cond cc, Reg dst) {
 }
 
 void X86_64::movzx(Reg dst, Reg src8) {
-    // Need REX for extended registers AND for accessing SPL/BPL/SIL/DIL
     uint8_t rex = 0x48;  // REX.W for 64-bit destination
-    if (needs_rex_r(dst)) rex |= 0x04;   // REX.R
-    if (needs_rex_r(src8)) rex |= 0x01;  // REX.B
-    bool needs_rex_for_low_byte = (reg_num(src8) >= 4 && reg_num(src8) <= 7 && !needs_rex_r(src8));
-    if (rex != 0x40 || needs_rex_for_low_byte) emit8(rex);
-
+    if (needs_rex_r(dst)) rex |= 0x04;
+    if (needs_rex_r(src8)) rex |= 0x01;
+    emit8(rex);
     emit8(0x0F);
     emit8(0xB6);  // MOVZX r64, r/m8
     emit_modrm_reg(dst, src8);
