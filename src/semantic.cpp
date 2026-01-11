@@ -28,7 +28,6 @@ static std::string type_to_string(const Type& t) {
     return "unknown";
 }
 
-
 static int type_rank(TypeKind k) {
     switch (k) {
         case TypeKind::BOOL:
@@ -207,8 +206,8 @@ void SemanticAnalyzer::analyze_statement(Statement* stmt) {
             }
 
             if (!compatible) {
-                std::string msg = "cannot convert '" + type_to_string(expr_type) +
-                                  "' to '" + type_to_string(current_return_type_) + "'";
+                std::string msg = "cannot convert '" + type_to_string(expr_type) + "' to '" +
+                                  type_to_string(current_return_type_) + "'";
                 throw CompileError(ErrorCode::IMPLICIT_NARROWING, {}, msg);
             }
         } else if (current_return_type_.kind != TypeKind::VOID) {

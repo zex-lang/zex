@@ -80,6 +80,7 @@ class CodeGenerator {
     int32_t calculate_stack_size(const Function& func);
     size_t add_string_literal(const std::string& str);
     Reg asm_reg_to_reg(AsmReg ar);
+    Type get_expression_type(const Expression* expr);
 };
 
 }  // namespace zex

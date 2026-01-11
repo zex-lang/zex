@@ -198,7 +198,8 @@ struct BinaryExpr : Expression {
 struct CastExpr : Expression {
     std::unique_ptr<Expression> expr;
     Type target_type;
-    CastExpr(std::unique_ptr<Expression> e, Type t) : expr(std::move(e)), target_type(std::move(t)) {}
+    CastExpr(std::unique_ptr<Expression> e, Type t)
+        : expr(std::move(e)), target_type(std::move(t)) {}
 };
 
 // Base class for all statement nodes

@@ -37,7 +37,7 @@ int32_t CodeGenerator::calculate_stack_size(const Function& func) {
     int32_t size = 0;
 
     for (const auto& param : func.params) {
-        size += 8;  // use 8 bytes per param for alignment
+        size += 8;    // use 8 bytes per param for alignment
         (void)param;  // suppress unused warning
     }
 
@@ -72,7 +72,11 @@ void CodeGenerator::generate_function(const Function& func) {
     }
 
     int32_t offset = -8;
-    Reg arg_regs[] = {Reg::rdi(), Reg::rsi(), Reg::rdx(), Reg::rcx(), Reg::r8(), Reg::r9()};
+    Reg gpr_regs[] = {Reg::rdi(), Reg::rsi(), Reg::rdx(), Reg::rcx(), Reg::r8(), Reg::r9()};
+    XMM xmm_regs[] = {XMM::XMM0, XMM::XMM1, XMM::XMM2, XMM::XMM3,
+                      XMM::XMM4, XMM::XMM5, XMM::XMM6, XMM::XMM7};
+    size_t gpr_idx = 0;
+    size_t xmm_idx = 0;
 
     for (size_t i = 0; i < func.params.size(); i++) {
         const auto& param = func.params[i];
@@ -82,27 +86,41 @@ void CodeGenerator::generate_function(const Function& func) {
         lv.const_value = 0;
         lv.type = param.type;
 
-        if (i < 6) {
-            emitter_.mov(Mem(Reg::rbp(), offset), arg_regs[i]);
+        if (param.type.kind == TypeKind::F32) {
+            // Float params passed in XMM0-XMM7
+            if (xmm_idx < 8) {
+                emitter_.movss(Mem(Reg::rbp(), offset), xmm_regs[xmm_idx++]);
+            }
         } else {
-            int32_t stack_param_offset = 16 + static_cast<int32_t>((i - 6) * 8);
-            emitter_.mov(Reg::rax(), Mem(Reg::rbp(), stack_param_offset));
-            emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+            // Integer/pointer params passed in RDI/RSI/RDX/RCX/R8/R9
+            if (gpr_idx < 6) {
+                emitter_.mov(Mem(Reg::rbp(), offset), gpr_regs[gpr_idx++]);
+            } else {
+                int32_t stack_param_offset = 16 + static_cast<int32_t>((gpr_idx - 6) * 8);
+                emitter_.mov(Reg::rax(), Mem(Reg::rbp(), stack_param_offset));
+                emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+                gpr_idx++;
+            }
         }
 
         locals_[param.name] = lv;
-        offset -= 8;  // use 8 bytes per param for alignment
+        offset -= 8;
     }
 
     for (const auto& stmt : func.body) {
         if (auto* var_decl = dynamic_cast<VarDecl*>(stmt.get())) {
             LocalVar lv;
-            lv.stack_offset = offset;
             lv.is_const = false;
             lv.const_value = 0;
             lv.type = var_decl->type;
+
+            // For arrays: decrement first so arr[0] is at lowest address
+            // Then adding i*elem_size gives correct higher addresses
+            int32_t var_size = static_cast<int32_t>(var_decl->type.size());
+            offset -= var_size;
+            lv.stack_offset = offset;
+
             locals_[var_decl->name] = lv;
-            offset -= static_cast<int32_t>(var_decl->type.size());
         } else if (auto* const_decl = dynamic_cast<ConstDecl*>(stmt.get())) {
             LocalVar lv;
             lv.stack_offset = 0;
@@ -142,12 +160,21 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
             }
         } else {
             generate_expression(var_decl->initializer.get());
-            emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+            if (var_decl->type.kind == TypeKind::F32) {
+                emitter_.movss(Mem(Reg::rbp(), offset), XMM::XMM0);
+            } else {
+                emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+            }
         }
     } else if (auto* assign = dynamic_cast<const AssignStmt*>(stmt)) {
         generate_expression(assign->value.get());
         int32_t offset = locals_[assign->name].stack_offset;
-        emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+        const LocalVar& lv = locals_[assign->name];
+        if (lv.type.kind == TypeKind::F32) {
+            emitter_.movss(Mem(Reg::rbp(), offset), XMM::XMM0);
+        } else {
+            emitter_.mov(Mem(Reg::rbp(), offset), Reg::rax());
+        }
     } else if (auto* idx_assign = dynamic_cast<const IndexAssignStmt*>(stmt)) {
         if (auto* idx_expr = dynamic_cast<IndexExpr*>(idx_assign->target.get())) {
             generate_expression(idx_assign->value.get());
@@ -170,7 +197,7 @@ void CodeGenerator::generate_statement(const Statement* stmt) {
                 emitter_.lea(Reg::rcx(), Mem(Reg::rbp(), lv.stack_offset));  // base address
                 emitter_.add(Reg::rcx(), Reg::rax());  // RCX = element address
 
-                emitter_.pop(Reg::rax());  // restore value
+                emitter_.pop(Reg::rax());                      // restore value
                 emitter_.mov(Mem(Reg::rcx(), 0), Reg::rax());  // store value
             }
         }
@@ -297,13 +324,16 @@ void CodeGenerator::generate_expression(const Expression* expr) {
             emitter_.imul(Reg::rax(), Reg::rcx());  // RAX = index * elem_size
 
             emitter_.lea(Reg::rcx(), Mem(Reg::rbp(), lv.stack_offset));  // base address
-            emitter_.add(Reg::rax(), Reg::rcx());  // RAX = element address
-            emitter_.mov(Reg::rax(), Mem(Reg::rax(), 0));  // load element
+            emitter_.add(Reg::rax(), Reg::rcx());                        // RAX = element address
+            emitter_.mov(Reg::rax(), Mem(Reg::rax(), 0));                // load element
         }
     } else if (auto* ident = dynamic_cast<const Identifier*>(expr)) {
         const LocalVar& lv = locals_[ident->name];
         if (lv.is_const) {
             emitter_.mov(Reg::rax(), lv.const_value);
+        } else if (lv.type.kind == TypeKind::F32) {
+            // Load float into XMM0
+            emitter_.movss(XMM::XMM0, Mem(Reg::rbp(), lv.stack_offset));
         } else {
             emitter_.mov(Reg::rax(), Mem(Reg::rbp(), lv.stack_offset));
         }
@@ -331,30 +361,60 @@ void CodeGenerator::generate_expression(const Expression* expr) {
                 break;
         }
     } else if (auto* call = dynamic_cast<const CallExpr*>(expr)) {
-        Reg arg_regs[] = {Reg::rdi(), Reg::rsi(), Reg::rdx(), Reg::rcx(), Reg::r8(), Reg::r9()};
+        Reg gpr_regs[] = {Reg::rdi(), Reg::rsi(), Reg::rdx(), Reg::rcx(), Reg::r8(), Reg::r9()};
+        XMM xmm_regs[] = {XMM::XMM0, XMM::XMM1, XMM::XMM2, XMM::XMM3,
+                          XMM::XMM4, XMM::XMM5, XMM::XMM6, XMM::XMM7};
         size_t num_args = call->args.size();
-        size_t stack_args = num_args > 6 ? num_args - 6 : 0;
 
-        // Align stack for call: RSP must be 16-byte aligned before CALL
-        // Push extra 8 bytes if stack_args is odd to maintain alignment
-        bool need_align = (stack_args % 2) == 1;
+        // Count GPR args for stack alignment
+        size_t gpr_count = 0;
+        for (size_t i = 0; i < num_args; i++) {
+            Type arg_type = get_expression_type(call->args[i].get());
+            if (arg_type.kind != TypeKind::F32) {
+                gpr_count++;
+            }
+        }
+        size_t stack_gpr_args = gpr_count > 6 ? gpr_count - 6 : 0;
+        bool need_align = (stack_gpr_args % 2) == 1;
         if (need_align) {
             emitter_.sub(Reg::rsp(), 8);
         }
 
-        // Push stack arguments (args 7+) in reverse order
-        for (size_t i = num_args; i > 6; i--) {
+        // Determine which args are floats
+        std::vector<bool> is_float_arg(num_args);
+        size_t gpr_idx = 0;
+        size_t xmm_idx = 0;
+
+        for (size_t i = 0; i < num_args; i++) {
+            Type arg_type = get_expression_type(call->args[i].get());
+            is_float_arg[i] = (arg_type.kind == TypeKind::F32);
+        }
+
+        // Push all args to stack in reverse order then pop to registers
+        for (size_t i = num_args; i > 0; i--) {
             generate_expression(call->args[i - 1].get());
+            if (is_float_arg[i - 1]) {
+                emitter_.movd(Reg::eax(), XMM::XMM0);
+            }
             emitter_.push(Reg::rax());
         }
 
-        // Push first 6 args then pop into registers
-        for (size_t i = std::min(num_args, size_t(6)); i > 0; i--) {
-            generate_expression(call->args[i - 1].get());
-            emitter_.push(Reg::rax());
-        }
-        for (size_t i = 0; i < num_args && i < 6; i++) {
-            emitter_.pop(arg_regs[i]);
+        // Now pop values into registers
+        gpr_idx = 0;
+        xmm_idx = 0;
+        for (size_t i = 0; i < num_args; i++) {
+            emitter_.pop(Reg::rax());
+            if (is_float_arg[i]) {
+                if (xmm_idx < 8) {
+                    emitter_.movd(xmm_regs[xmm_idx++], Reg::eax());
+                }
+            } else {
+                if (gpr_idx < 6) {
+                    emitter_.mov(gpr_regs[gpr_idx++], Reg::rax());
+                } else {
+                    emitter_.push(Reg::rax());
+                }
+            }
         }
 
         emitter_.call(0);
@@ -365,9 +425,10 @@ void CodeGenerator::generate_expression(const Expression* expr) {
         call_patches_.push_back(patch);
 
         // Clean up stack args
-        if (stack_args > 0 || need_align) {
-            int32_t cleanup = static_cast<int32_t>(stack_args * 8);
-            if (need_align) cleanup += 8;
+        if (stack_gpr_args > 0 || need_align) {
+            int32_t cleanup = static_cast<int32_t>(stack_gpr_args * 8);
+            if (need_align)
+                cleanup += 8;
             emitter_.add(Reg::rsp(), cleanup);
         }
     } else if (auto* binary = dynamic_cast<const BinaryExpr*>(expr)) {
@@ -401,10 +462,69 @@ void CodeGenerator::generate_expression(const Expression* expr) {
             return;
         }
 
+        Type left_type = get_expression_type(binary->left.get());
+        Type right_type = get_expression_type(binary->right.get());
+        bool is_float = (left_type.kind == TypeKind::F32 || right_type.kind == TypeKind::F32);
+
         generate_expression(binary->right.get());
+        if (is_float) {
+            emitter_.movd(Reg::eax(), XMM::XMM0);
+        }
         emitter_.push(Reg::rax());
         generate_expression(binary->left.get());
         emitter_.pop(Reg::rcx());
+
+        if (is_float) {
+            emitter_.movd(XMM::XMM1, Reg::ecx());
+
+            switch (binary->op) {
+                case BinaryOp::ADD:
+                    emitter_.addss(XMM::XMM0, XMM::XMM1);
+                    break;
+                case BinaryOp::SUB:
+                    emitter_.subss(XMM::XMM0, XMM::XMM1);
+                    break;
+                case BinaryOp::MUL:
+                    emitter_.mulss(XMM::XMM0, XMM::XMM1);
+                    break;
+                case BinaryOp::DIV:
+                    emitter_.divss(XMM::XMM0, XMM::XMM1);
+                    break;
+                case BinaryOp::LT:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::B, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                case BinaryOp::GT:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::A, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                case BinaryOp::LE:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::BE, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                case BinaryOp::GE:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::AE, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                case BinaryOp::EQ:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::E, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                case BinaryOp::NE:
+                    emitter_.ucomiss(XMM::XMM0, XMM::XMM1);
+                    emitter_.setcc(Cond::NE, Reg::al());
+                    emitter_.movzx(Reg::rax(), Reg::al());
+                    break;
+                default:
+                    break;
+            }
+            return;
+        }
 
         switch (binary->op) {
             case BinaryOp::ADD:
@@ -462,7 +582,7 @@ void CodeGenerator::generate_expression(const Expression* expr) {
     } else if (auto* cast = dynamic_cast<const CastExpr*>(expr)) {
         generate_expression(cast->expr.get());
 
-        Type from_type = semantic_.get_expression_type(cast->expr.get());
+        Type from_type = get_expression_type(cast->expr.get());
         const Type& to_type = cast->target_type;
 
         if (from_type.kind == TypeKind::F32 && to_type.kind != TypeKind::F32) {
@@ -471,6 +591,64 @@ void CodeGenerator::generate_expression(const Expression* expr) {
             emitter_.cvtsi2ss(XMM::XMM0, Reg::rax());
         }
     }
+}
+
+Type CodeGenerator::get_expression_type(const Expression* expr) {
+    if (dynamic_cast<const IntLiteral*>(expr)) {
+        return Type(TypeKind::I64);
+    }
+    if (dynamic_cast<const FloatLiteral*>(expr)) {
+        return Type(TypeKind::F32);
+    }
+    if (dynamic_cast<const CharLiteral*>(expr)) {
+        return Type(TypeKind::CHAR);
+    }
+    if (dynamic_cast<const BoolLiteral*>(expr)) {
+        return Type(TypeKind::BOOL);
+    }
+    if (dynamic_cast<const StringLiteral*>(expr)) {
+        Type ptr(TypeKind::POINTER);
+        ptr.element_type = std::make_unique<Type>(TypeKind::CHAR);
+        return ptr;
+    }
+    if (auto* ident = dynamic_cast<const Identifier*>(expr)) {
+        auto it = locals_.find(ident->name);
+        if (it != locals_.end()) {
+            return it->second.type;
+        }
+        return Type(TypeKind::I64);
+    }
+    if (auto* binary = dynamic_cast<const BinaryExpr*>(expr)) {
+        switch (binary->op) {
+            case BinaryOp::EQ:
+            case BinaryOp::NE:
+            case BinaryOp::LT:
+            case BinaryOp::LE:
+            case BinaryOp::GT:
+            case BinaryOp::GE:
+            case BinaryOp::AND:
+            case BinaryOp::OR:
+                return Type(TypeKind::BOOL);
+            default:
+                return get_expression_type(binary->left.get());
+        }
+    }
+    if (auto* unary = dynamic_cast<const UnaryExpr*>(expr)) {
+        if (unary->op == UnaryOp::NOT) {
+            return Type(TypeKind::BOOL);
+        }
+        return get_expression_type(unary->operand.get());
+    }
+    if (auto* cast = dynamic_cast<const CastExpr*>(expr)) {
+        return cast->target_type;
+    }
+    if (auto* idx = dynamic_cast<const IndexExpr*>(expr)) {
+        Type arr = get_expression_type(idx->array.get());
+        if ((arr.kind == TypeKind::ARRAY || arr.kind == TypeKind::POINTER) && arr.element_type) {
+            return *arr.element_type;
+        }
+    }
+    return Type(TypeKind::I64);
 }
 
 void CodeGenerator::resolve_calls() {
@@ -487,54 +665,102 @@ void CodeGenerator::resolve_calls() {
 
 Reg CodeGenerator::asm_reg_to_reg(AsmReg ar) {
     switch (ar) {
-        case AsmReg::RAX: return Reg::rax();
-        case AsmReg::RCX: return Reg::rcx();
-        case AsmReg::RDX: return Reg::rdx();
-        case AsmReg::RBX: return Reg::rbx();
-        case AsmReg::RSP: return Reg::rsp();
-        case AsmReg::RBP: return Reg::rbp();
-        case AsmReg::RSI: return Reg::rsi();
-        case AsmReg::RDI: return Reg::rdi();
-        case AsmReg::R8:  return Reg::r8();
-        case AsmReg::R9:  return Reg::r9();
-        case AsmReg::R10: return Reg::r10();
-        case AsmReg::R11: return Reg::r11();
-        case AsmReg::R12: return Reg::r12();
-        case AsmReg::R13: return Reg::r13();
-        case AsmReg::R14: return Reg::r14();
-        case AsmReg::R15: return Reg::r15();
-        case AsmReg::EAX: return Reg::eax();
-        case AsmReg::ECX: return Reg::ecx();
-        case AsmReg::EDX: return Reg::edx();
-        case AsmReg::EBX: return Reg::ebx();
-        case AsmReg::ESP: return Reg::esp();
-        case AsmReg::EBP: return Reg::ebp();
-        case AsmReg::ESI: return Reg::esi();
-        case AsmReg::EDI: return Reg::edi();
-        case AsmReg::R8D:  return Reg::r8d();
-        case AsmReg::R9D:  return Reg::r9d();
-        case AsmReg::R10D: return Reg::r10d();
-        case AsmReg::R11D: return Reg::r11d();
-        case AsmReg::R12D: return Reg::r12d();
-        case AsmReg::R13D: return Reg::r13d();
-        case AsmReg::R14D: return Reg::r14d();
-        case AsmReg::R15D: return Reg::r15d();
-        case AsmReg::AX: return Reg::ax();
-        case AsmReg::CX: return Reg::cx();
-        case AsmReg::DX: return Reg::dx();
-        case AsmReg::BX: return Reg::bx();
-        case AsmReg::SP: return Reg::sp();
-        case AsmReg::BP: return Reg::bp();
-        case AsmReg::SI: return Reg::si();
-        case AsmReg::DI: return Reg::di();
-        case AsmReg::AL: return Reg::al();
-        case AsmReg::CL: return Reg::cl();
-        case AsmReg::DL: return Reg::dl();
-        case AsmReg::BL: return Reg::bl();
-        case AsmReg::AH: return Reg::ah();
-        case AsmReg::CH: return Reg::ch();
-        case AsmReg::DH: return Reg::dh();
-        case AsmReg::BH: return Reg::bh();
+        case AsmReg::RAX:
+            return Reg::rax();
+        case AsmReg::RCX:
+            return Reg::rcx();
+        case AsmReg::RDX:
+            return Reg::rdx();
+        case AsmReg::RBX:
+            return Reg::rbx();
+        case AsmReg::RSP:
+            return Reg::rsp();
+        case AsmReg::RBP:
+            return Reg::rbp();
+        case AsmReg::RSI:
+            return Reg::rsi();
+        case AsmReg::RDI:
+            return Reg::rdi();
+        case AsmReg::R8:
+            return Reg::r8();
+        case AsmReg::R9:
+            return Reg::r9();
+        case AsmReg::R10:
+            return Reg::r10();
+        case AsmReg::R11:
+            return Reg::r11();
+        case AsmReg::R12:
+            return Reg::r12();
+        case AsmReg::R13:
+            return Reg::r13();
+        case AsmReg::R14:
+            return Reg::r14();
+        case AsmReg::R15:
+            return Reg::r15();
+        case AsmReg::EAX:
+            return Reg::eax();
+        case AsmReg::ECX:
+            return Reg::ecx();
+        case AsmReg::EDX:
+            return Reg::edx();
+        case AsmReg::EBX:
+            return Reg::ebx();
+        case AsmReg::ESP:
+            return Reg::esp();
+        case AsmReg::EBP:
+            return Reg::ebp();
+        case AsmReg::ESI:
+            return Reg::esi();
+        case AsmReg::EDI:
+            return Reg::edi();
+        case AsmReg::R8D:
+            return Reg::r8d();
+        case AsmReg::R9D:
+            return Reg::r9d();
+        case AsmReg::R10D:
+            return Reg::r10d();
+        case AsmReg::R11D:
+            return Reg::r11d();
+        case AsmReg::R12D:
+            return Reg::r12d();
+        case AsmReg::R13D:
+            return Reg::r13d();
+        case AsmReg::R14D:
+            return Reg::r14d();
+        case AsmReg::R15D:
+            return Reg::r15d();
+        case AsmReg::AX:
+            return Reg::ax();
+        case AsmReg::CX:
+            return Reg::cx();
+        case AsmReg::DX:
+            return Reg::dx();
+        case AsmReg::BX:
+            return Reg::bx();
+        case AsmReg::SP:
+            return Reg::sp();
+        case AsmReg::BP:
+            return Reg::bp();
+        case AsmReg::SI:
+            return Reg::si();
+        case AsmReg::DI:
+            return Reg::di();
+        case AsmReg::AL:
+            return Reg::al();
+        case AsmReg::CL:
+            return Reg::cl();
+        case AsmReg::DL:
+            return Reg::dl();
+        case AsmReg::BL:
+            return Reg::bl();
+        case AsmReg::AH:
+            return Reg::ah();
+        case AsmReg::CH:
+            return Reg::ch();
+        case AsmReg::DH:
+            return Reg::dh();
+        case AsmReg::BH:
+            return Reg::bh();
     }
     return Reg::rax();
 }
@@ -652,8 +878,7 @@ void CodeGenerator::generate_asm_block(const AsmBlock* block) {
                         emitter_.cmp(asm_reg_to_reg(ops[0].reg), asm_reg_to_reg(ops[1].reg));
                     } else if (ops[0].kind == AsmOperandKind::REG &&
                                ops[1].kind == AsmOperandKind::IMM) {
-                        emitter_.cmp(asm_reg_to_reg(ops[0].reg),
-                                         static_cast<int32_t>(ops[1].imm));
+                        emitter_.cmp(asm_reg_to_reg(ops[0].reg), static_cast<int32_t>(ops[1].imm));
                     }
                 }
                 break;
