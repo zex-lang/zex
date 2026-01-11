@@ -483,6 +483,7 @@ std::unique_ptr<ConstDecl> Parser::parse_const_decl() {
     expect(TokenType::SEMICOLON, ErrorCode::UNEXPECTED_TOKEN);
 
     int64_t value = eval_const_expr(expr.get());
+    const_values_[name] = value;
     return std::make_unique<ConstDecl>(name, std::move(type), value);
 }
 
@@ -501,6 +502,14 @@ int64_t Parser::eval_const_expr(Expression* expr) {
 
     if (auto* sz = dynamic_cast<SizeofExpr*>(expr)) {
         return static_cast<int64_t>(sz->target_type.size());
+    }
+
+    if (auto* ident = dynamic_cast<Identifier*>(expr)) {
+        auto it = const_values_.find(ident->name);
+        if (it != const_values_.end()) {
+            return it->second;
+        }
+        throw error(ErrorCode::UNDEFINED_VARIABLE, "'" + ident->name + "'");
     }
 
     if (auto* unary = dynamic_cast<UnaryExpr*>(expr)) {

@@ -5,6 +5,7 @@
 #define ZEX_PARSER_HPP
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "zex/ast.hpp"
@@ -24,6 +25,7 @@ class Parser {
    private:
     std::vector<Token> tokens_;
     size_t current_;
+    std::unordered_map<std::string, int64_t> const_values_;
 
     // Token navigation
     const Token& peek() const;
